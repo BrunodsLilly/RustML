@@ -1,0 +1,16 @@
+body {
+  font-family:'Lucida Console', monospace;
+  font-size: 18px;
+  color: #111;
+  background-color: white;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 50px;
+  box-sizing: border-box;
+}
+hr { border: none; height: 2px; background-color: lightgrey; width: 100%; margin: 30px auto; }
+table { border-collapse: collapse; text-align: center; width: 100%; }
+td {
+  padding: 5px 20px;
+  border: 1px solid #dddddd;
+}

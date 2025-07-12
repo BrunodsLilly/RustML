@@ -1,0 +1,8 @@
+[package]
+name = "coursera_ml"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+loader = { path = "../loader" }
+notes = { path = "../notes" }
