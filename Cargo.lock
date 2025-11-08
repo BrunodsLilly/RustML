@@ -943,6 +943,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dimensionality_reduction"
+version = "0.1.0"
+dependencies = [
+ "linear_algebra",
+ "ml_traits",
+]
+
+[[package]]
 name = "dioxus"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
