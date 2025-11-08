@@ -484,6 +484,10 @@ fn GradientDescentDemo() -> Element {
     let mut learning_rate = use_signal(|| 0.01);
     let mut iterations = use_signal(|| 500);
 
+    // CSV upload state
+    let mut use_csv = use_signal(|| false);
+    let mut csv_dataset = use_signal(|| Option::<loader::CsvDataset>::None);
+
     // Input for new data point
     let mut new_x = use_signal(|| String::from("6"));
     let mut new_y = use_signal(|| String::from("13"));
@@ -491,28 +495,47 @@ fn GradientDescentDemo() -> Element {
     let train_model = move |_| {
         is_training.set(true);
 
-        // Prepare training data
-        let data = training_data();
-        if data.is_empty() {
-            is_training.set(false);
-            return;
+        if use_csv() {
+            // Train on CSV data
+            if let Some(dataset) = csv_dataset() {
+                let mut model = LinearRegressor::new(learning_rate());
+                model.fit(
+                    &dataset.features,
+                    &Vector {
+                        data: dataset.targets.clone(),
+                    },
+                    iterations(),
+                );
+
+                // Store results
+                training_progress.set(model.training_history.clone());
+                trained_model.set(Some(model));
+            }
+        } else {
+            // Train on preset/manual data
+            let data = training_data();
+            if data.is_empty() {
+                is_training.set(false);
+                return;
+            }
+
+            let x_vals: Vec<f64> = data.iter().map(|(x, _)| *x).collect();
+            let y_vals: Vec<f64> = data.iter().map(|(_, y)| *y).collect();
+
+            // Create matrix and vector
+            let n = x_vals.len();
+            let X = Matrix::from_vec(x_vals, n, 1).unwrap();
+            let y = Vector { data: y_vals };
+
+            // Train model
+            let mut model = LinearRegressor::new(learning_rate());
+            model.fit(&X, &y, iterations());
+
+            // Store results
+            training_progress.set(model.training_history.clone());
+            trained_model.set(Some(model));
         }
 
-        let x_vals: Vec<f64> = data.iter().map(|(x, _)| *x).collect();
-        let y_vals: Vec<f64> = data.iter().map(|(_, y)| *y).collect();
-
-        // Create matrix and vector
-        let n = x_vals.len();
-        let X = Matrix::from_vec(x_vals, n, 1).unwrap();
-        let y = Vector { data: y_vals };
-
-        // Train model
-        let mut model = LinearRegressor::new(learning_rate());
-        model.fit(&X, &y, iterations());
-
-        // Store results
-        training_progress.set(model.training_history.clone());
-        trained_model.set(Some(model));
         is_training.set(false);
     };
 
@@ -540,6 +563,11 @@ fn GradientDescentDemo() -> Element {
         training_progress.set(vec![]);
     };
 
+    let on_csv_loaded = move |dataset: loader::CsvDataset| {
+        csv_dataset.set(Some(dataset));
+        trained_model.set(None); // Reset model when new data is loaded
+    };
+
     rsx! {
         section { class: "demo-section gradient-descent",
             h2 { "🎯 Interactive Gradient Descent Trainer" }
@@ -550,7 +578,45 @@ fn GradientDescentDemo() -> Element {
                 div { class: "trainer-panel",
                     h3 { "Training Data" }
 
-                    div { class: "preset-buttons",
+                    // Data source toggle
+                    div { class: "data-source-toggle",
+                        label {
+                            input {
+                                r#type: "radio",
+                                name: "data-source",
+                                value: "preset",
+                                checked: !use_csv(),
+                                onchange: move |_| use_csv.set(false),
+                            }
+                            " Use Preset Data"
+                        }
+                        label {
+                            input {
+                                r#type: "radio",
+                                name: "data-source",
+                                value: "csv",
+                                checked: use_csv(),
+                                onchange: move |_| use_csv.set(true),
+                            }
+                            " Upload CSV"
+                        }
+                    }
+
+                    // Conditional rendering based on data source
+                    if use_csv() {
+                        // CSV Upload Interface
+                        CsvUploader { on_loaded: on_csv_loaded }
+
+                        // Display dataset info
+                        if let Some(dataset) = csv_dataset() {
+                            div { class: "dataset-info",
+                                p { "✓ Dataset loaded: {dataset.num_samples} samples" }
+                                p { "Features: {dataset.features.cols} ({dataset.feature_names.join(\", \")})" }
+                            }
+                        }
+                    } else {
+                        // Preset Data Interface
+                        div { class: "preset-buttons",
                         button {
                             onclick: move |_| load_preset("linear"),
                             "📈 Linear (y=2x+1)"
@@ -627,6 +693,7 @@ fn GradientDescentDemo() -> Element {
                             }
                         }
                     }
+                    } // end else (preset data interface)
                 }
 
                 // Middle: Training controls

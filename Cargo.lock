@@ -5170,6 +5170,7 @@ name = "web"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "csv",
  "dioxus",
  "getrandom 0.2.16",
  "linear_algebra",
