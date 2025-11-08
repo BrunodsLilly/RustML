@@ -16,6 +16,8 @@ enum Route {
     ShowcaseView,
     #[route("/optimizers")]
     OptimizersView,
+    #[route("/playground")]
+    PlaygroundView,
 }
 
 fn main() {

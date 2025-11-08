@@ -10,6 +10,13 @@ pub fn OptimizersView() -> Element {
 }
 
 #[component]
+pub fn PlaygroundView() -> Element {
+    rsx! {
+        MLPlayground {}
+    }
+}
+
+#[component]
 pub fn MainView() -> Element {
     rsx! {
         div { id: "main",
@@ -33,6 +40,14 @@ pub fn MainView() -> Element {
                             class: "link_class",
                             to: Route::OptimizersView {},
                             "Optimizer Visualizer"
+                        }
+                    }
+                    li {
+                        Link {
+                            active_class: "active",
+                            class: "link_class",
+                            to: Route::PlaygroundView {},
+                            "🚀 ML Playground"
                         }
                     }
                     li {
