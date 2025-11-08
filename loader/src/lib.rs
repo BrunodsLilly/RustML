@@ -4,6 +4,35 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 
+pub mod csv_loader;
+pub use csv_loader::{CsvDataset, CsvError};
+
+use linear_algebra::matrix::Matrix;
+
+/// Trait for trainable ML models
+pub trait Trainable {
+    type Error;
+
+    /// Train the model on features and targets
+    fn fit(&mut self, features: &Matrix<f64>, targets: &[f64]) -> Result<(), Self::Error>;
+
+    /// Get training loss history (optional, returns empty vec by default)
+    fn loss_history(&self) -> Vec<f64> {
+        vec![]
+    }
+}
+
+/// Trait for models that can make predictions
+pub trait Predictable {
+    type Error;
+
+    /// Predict targets for given features
+    fn predict(&self, features: &Matrix<f64>) -> Result<Vec<f64>, Self::Error>;
+}
+
+/// Combined trait for full ML pipeline
+pub trait Model: Trainable + Predictable {}
+
 pub fn read<P>(filepath: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
     P: AsRef<Path>,

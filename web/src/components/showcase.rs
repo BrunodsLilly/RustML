@@ -218,33 +218,23 @@ fn MatrixOperationsDemo() -> Element {
     let mut v2 = use_signal(|| 2.0);
 
     // Compute results
-    let matrix_a = use_memo(move || {
-        Matrix::from_vec(vec![a11(), a12(), a21(), a22()], 2, 2).unwrap()
+    let matrix_a =
+        use_memo(move || Matrix::from_vec(vec![a11(), a12(), a21(), a22()], 2, 2).unwrap());
+
+    let matrix_b =
+        use_memo(move || Matrix::from_vec(vec![b11(), b12(), b21(), b22()], 2, 2).unwrap());
+
+    let vector_v = use_memo(move || Vector {
+        data: vec![v1(), v2()],
     });
 
-    let matrix_b = use_memo(move || {
-        Matrix::from_vec(vec![b11(), b12(), b21(), b22()], 2, 2).unwrap()
-    });
+    let result_add = use_memo(move || matrix_a() + matrix_b());
 
-    let vector_v = use_memo(move || {
-        Vector { data: vec![v1(), v2()] }
-    });
+    let result_mul = use_memo(move || matrix_a() * matrix_b());
 
-    let result_add = use_memo(move || {
-        matrix_a() + matrix_b()
-    });
+    let result_transpose = use_memo(move || matrix_a().transpose());
 
-    let result_mul = use_memo(move || {
-        matrix_a() * matrix_b()
-    });
-
-    let result_transpose = use_memo(move || {
-        matrix_a().transpose()
-    });
-
-    let result_mat_vec = use_memo(move || {
-        matrix_a() * vector_v()
-    });
+    let result_mat_vec = use_memo(move || matrix_a() * vector_v());
 
     rsx! {
         section { class: "demo-section matrix-ops",
@@ -486,7 +476,8 @@ fn MatrixOperationsDemo() -> Element {
 #[component]
 fn GradientDescentDemo() -> Element {
     // Training state
-    let mut training_data = use_signal(|| vec![(1.0, 3.0), (2.0, 5.0), (3.0, 7.0), (4.0, 9.0), (5.0, 11.0)]);
+    let mut training_data =
+        use_signal(|| vec![(1.0, 3.0), (2.0, 5.0), (3.0, 7.0), (4.0, 9.0), (5.0, 11.0)]);
     let mut is_training = use_signal(|| false);
     let mut trained_model = use_signal(|| None::<LinearRegressor>);
     let mut training_progress = use_signal(|| Vec::<f64>::new());

@@ -3,8 +3,8 @@
 //! Following the Karpathy philosophy: clear, pedagogical tests that teach us
 //! how these optimizers actually behave, not just that they compile.
 
-use neural_network::optimizer::{Optimizer, OptimizerType};
 use linear_algebra::{matrix::Matrix, vectors::Vector};
+use neural_network::optimizer::{Optimizer, OptimizerType};
 
 // ===================================================================
 // Helper Functions
@@ -61,8 +61,10 @@ fn test_sgd_simple_update() {
 
     opt.update_weights(0, &gradient, &mut weights, &layer_shapes);
 
-    assert!((weights[(0, 0)] - 0.8).abs() < 1e-10,
-            "SGD: x_new = x_old - lr*grad = 1.0 - 0.1*2.0 = 0.8");
+    assert!(
+        (weights[(0, 0)] - 0.8).abs() < 1e-10,
+        "SGD: x_new = x_old - lr*grad = 1.0 - 0.1*2.0 = 0.8"
+    );
 }
 
 #[test]
@@ -78,8 +80,10 @@ fn test_sgd_converges() {
         opt.update_weights(0, &gradient, &mut weights, &layer_shapes);
     }
 
-    assert!(weights[(0, 0)].abs() < 0.01,
-            "After 50 steps, SGD should get close to x=0");
+    assert!(
+        weights[(0, 0)].abs() < 0.01,
+        "After 50 steps, SGD should get close to x=0"
+    );
 }
 
 #[test]
@@ -106,7 +110,7 @@ fn test_momentum_accelerates() {
     // Key insight: With consistent gradients, momentum should take bigger steps over time
     let mut opt = Optimizer::momentum(0.1, 0.9);
     let mut weights = mat(vec![1.0], 1, 1);
-    let gradient = mat(vec![1.0], 1, 1);  // Constant gradient
+    let gradient = mat(vec![1.0], 1, 1); // Constant gradient
     let layer_shapes = vec![(1, 1)];
 
     let x0 = weights[(0, 0)];
@@ -136,24 +140,30 @@ fn test_momentum_accelerates() {
 fn test_rmsprop_adapts() {
     // RMSprop should give different effective learning rates to different dimensions
     let mut opt = Optimizer::rmsprop(0.1, 0.9, 1e-8);
-    let mut weights = mat(vec![1.0, 1.0], 1, 2);  // Two parameters
+    let mut weights = mat(vec![1.0, 1.0], 1, 2); // Two parameters
     let layer_shapes = vec![(1, 2)];
 
     // Run 10 steps with very different gradient magnitudes
     for _ in 0..10 {
-        let gradient = mat(vec![10.0, 0.1], 1, 2);  // 100x difference
+        let gradient = mat(vec![10.0, 0.1], 1, 2); // 100x difference
         opt.update_weights(0, &gradient, &mut weights, &layer_shapes);
     }
 
     let change0 = (1.0 - weights[(0, 0)]).abs();
     let change1 = (1.0 - weights[(0, 1)]).abs();
 
-    println!("RMSprop changes: dim0={:.6}, dim1={:.6}, ratio={:.2}",
-             change0, change1, change0/change1);
+    println!(
+        "RMSprop changes: dim0={:.6}, dim1={:.6}, ratio={:.2}",
+        change0,
+        change1,
+        change0 / change1
+    );
 
     // Despite 100x gradient difference, changes shouldn't differ by 100x
-    assert!(change0 / change1 < 50.0,
-            "RMSprop should adapt learning rates to prevent huge imbalance");
+    assert!(
+        change0 / change1 < 50.0,
+        "RMSprop should adapt learning rates to prevent huge imbalance"
+    );
 }
 
 // ===================================================================
@@ -176,7 +186,10 @@ fn test_adam_bias_correction() {
 
     // Without bias correction, this would be ~0.0001
     // With bias correction, it should be reasonable
-    assert!(step1 > 0.0001, "Bias correction should prevent tiny first step");
+    assert!(
+        step1 > 0.0001,
+        "Bias correction should prevent tiny first step"
+    );
 }
 
 // ===================================================================
@@ -201,10 +214,10 @@ fn test_all_optimizers_on_rosenbrock() {
     println!("Start: (-1, 1), Target: (1, 1)\n");
 
     let tests = vec![
-        ("SGD",      Optimizer::sgd(0.0001)),
+        ("SGD", Optimizer::sgd(0.0001)),
         ("Momentum", Optimizer::momentum(0.0001, 0.9)),
-        ("RMSprop",  Optimizer::rmsprop(0.001, 0.999, 1e-8)),
-        ("Adam",     Optimizer::adam(0.001, 0.9, 0.999, 1e-8)),
+        ("RMSprop", Optimizer::rmsprop(0.001, 0.999, 1e-8)),
+        ("Adam", Optimizer::adam(0.001, 0.9, 0.999, 1e-8)),
     ];
 
     for (name, mut opt) in tests {
@@ -228,8 +241,10 @@ fn test_all_optimizers_on_rosenbrock() {
         let loss_final = rosenbrock(x_final, y_final);
         let dist = ((x_final - 1.0).powi(2) + (y_final - 1.0).powi(2)).sqrt();
 
-        println!("{:8} → ({:.4}, {:.4}), loss={:.4}, dist={:.4}",
-                 name, x_final, y_final, loss_final, dist);
+        println!(
+            "{:8} → ({:.4}, {:.4}), loss={:.4}, dist={:.4}",
+            name, x_final, y_final, loss_final, dist
+        );
 
         // All should make progress
         assert!(loss_final < loss0, "{} should reduce loss", name);
@@ -286,12 +301,16 @@ fn test_optimizer_reset() {
     println!("Reset optimizer weight: {:.10}", weights[(0, 0)]);
     println!("Fresh optimizer weight: {:.10}", weights2[(0, 0)]);
 
-    assert!((weights[(0, 0)] - weights2[(0, 0)]).abs() < 1e-10,
-            "Reset optimizer should match fresh optimizer");
+    assert!(
+        (weights[(0, 0)] - weights2[(0, 0)]).abs() < 1e-10,
+        "Reset optimizer should match fresh optimizer"
+    );
 
     // Also verify weights actually changed from the pre-reset value
-    assert!((weights[(0, 0)] - final_weight_before_reset).abs() > 0.001,
-            "After reset, optimizer should start fresh, not continue from old state");
+    assert!(
+        (weights[(0, 0)] - final_weight_before_reset).abs() > 0.001,
+        "After reset, optimizer should start fresh, not continue from old state"
+    );
 }
 
 #[test]

@@ -68,20 +68,14 @@ impl LossFunction {
                 t1 * t1 + t2 * t2
             }
 
-            Self::Saddle => {
-                x * x - y * y
-            }
+            Self::Saddle => x * x - y * y,
 
             Self::Rastrigin => {
                 let a = 10.0;
-                2.0 * a +
-                (x * x - a * (2.0 * PI * x).cos()) +
-                (y * y - a * (2.0 * PI * y).cos())
+                2.0 * a + (x * x - a * (2.0 * PI * x).cos()) + (y * y - a * (2.0 * PI * y).cos())
             }
 
-            Self::Quadratic => {
-                x * x + y * y
-            }
+            Self::Quadratic => x * x + y * y,
         }
     }
 
@@ -101,12 +95,10 @@ impl LossFunction {
                 let t2 = 2.25 - x + x * y * y;
                 let t3 = 2.625 - x + x * y * y * y;
 
-                let dx = 2.0 * t1 * (-1.0 + y) +
-                         2.0 * t2 * (-1.0 + y * y) +
-                         2.0 * t3 * (-1.0 + y * y * y);
-                let dy = 2.0 * t1 * x +
-                         2.0 * t2 * (2.0 * x * y) +
-                         2.0 * t3 * (3.0 * x * y * y);
+                let dx = 2.0 * t1 * (-1.0 + y)
+                    + 2.0 * t2 * (-1.0 + y * y)
+                    + 2.0 * t3 * (-1.0 + y * y * y);
+                let dy = 2.0 * t1 * x + 2.0 * t2 * (2.0 * x * y) + 2.0 * t3 * (3.0 * x * y * y);
                 (dx, dy)
             }
 
@@ -119,9 +111,7 @@ impl LossFunction {
                 (dx, dy)
             }
 
-            Self::Saddle => {
-                (2.0 * x, -2.0 * y)
-            }
+            Self::Saddle => (2.0 * x, -2.0 * y),
 
             Self::Rastrigin => {
                 let a = 10.0;
@@ -130,9 +120,7 @@ impl LossFunction {
                 (dx, dy)
             }
 
-            Self::Quadratic => {
-                (2.0 * x, 2.0 * y)
-            }
+            Self::Quadratic => (2.0 * x, 2.0 * y),
         }
     }
 
@@ -329,7 +317,10 @@ mod tests {
         let f = LossFunction::Rosenbrock;
         let (x, y, expected) = f.global_minima()[0];
         let actual = f.evaluate(x, y);
-        assert!((actual - expected).abs() < 1e-10, "Rosenbrock minimum should be 0");
+        assert!(
+            (actual - expected).abs() < 1e-10,
+            "Rosenbrock minimum should be 0"
+        );
     }
 
     #[test]
@@ -352,11 +343,18 @@ mod tests {
         for func in LossFunction::all() {
             let (x, y) = func.starting_point();
             let loss = func.evaluate(x, y);
-            assert!(loss.is_finite(), "{} should produce finite value", func.name());
+            assert!(
+                loss.is_finite(),
+                "{} should produce finite value",
+                func.name()
+            );
 
             let (dx, dy) = func.gradient(x, y);
-            assert!(dx.is_finite() && dy.is_finite(),
-                   "{} gradients should be finite", func.name());
+            assert!(
+                dx.is_finite() && dy.is_finite(),
+                "{} gradients should be finite",
+                func.name()
+            );
         }
     }
 }

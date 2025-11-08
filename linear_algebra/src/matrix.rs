@@ -404,10 +404,7 @@ mod tests {
 
     #[test]
     fn test_matrix_macro() {
-        let m: Matrix<i32> = matrix![
-            [1, 2, 3],
-            [4, 5, 6]
-        ];
+        let m: Matrix<i32> = matrix![[1, 2, 3], [4, 5, 6]];
         assert_eq!(m.rows, 2);
         assert_eq!(m.cols, 3);
         assert_eq!(m[(0, 0)], 1);

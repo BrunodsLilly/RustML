@@ -47,12 +47,10 @@ impl Initializer {
                 let limit = (6.0 / (fan_in + fan_out)).sqrt();
                 let dist = Uniform::new(-limit, limit);
 
-                let data: Vec<f64> = (0..rows * cols)
-                    .map(|_| dist.sample(&mut rng))
-                    .collect();
+                let data: Vec<f64> = (0..rows * cols).map(|_| dist.sample(&mut rng)).collect();
 
                 Matrix::from_vec(data, rows, cols).unwrap()
-            },
+            }
             Initializer::He => {
                 let fan_in = cols as f64;
                 let std_dev = (2.0 / fan_in).sqrt();
@@ -63,23 +61,17 @@ impl Initializer {
                 let limit = 3.0_f64.sqrt() * std_dev;
                 let dist = Uniform::new(-limit, limit);
 
-                let data: Vec<f64> = (0..rows * cols)
-                    .map(|_| dist.sample(&mut rng))
-                    .collect();
+                let data: Vec<f64> = (0..rows * cols).map(|_| dist.sample(&mut rng)).collect();
 
                 Matrix::from_vec(data, rows, cols).unwrap()
-            },
-            Initializer::Zeros => {
-                Matrix::zeros(rows, cols)
-            },
+            }
+            Initializer::Zeros => Matrix::zeros(rows, cols),
             Initializer::SmallRandom => {
                 let dist = Uniform::new(-0.01, 0.01);
-                let data: Vec<f64> = (0..rows * cols)
-                    .map(|_| dist.sample(&mut rng))
-                    .collect();
+                let data: Vec<f64> = (0..rows * cols).map(|_| dist.sample(&mut rng)).collect();
 
                 Matrix::from_vec(data, rows, cols).unwrap()
-            },
+            }
         }
     }
 
@@ -92,13 +84,15 @@ impl Initializer {
     /// Vector with initialized biases (typically zeros)
     pub fn initialize_vector(&self, size: usize) -> Vector<f64> {
         match self {
-            Initializer::Zeros => {
-                Vector { data: vec![0.0; size] }
+            Initializer::Zeros => Vector {
+                data: vec![0.0; size],
             },
             _ => {
                 // Biases typically initialized to zero regardless of strategy
-                Vector { data: vec![0.0; size] }
-            },
+                Vector {
+                    data: vec![0.0; size],
+                }
+            }
         }
     }
 }
@@ -121,20 +115,33 @@ mod tests {
         let limit = (6.0_f64 / (fan_in + fan_out)).sqrt();
 
         for &w in &weights.data {
-            assert!(w >= -limit && w <= limit, "Weight {} outside range [-{}, {}]", w, limit, limit);
+            assert!(
+                w >= -limit && w <= limit,
+                "Weight {} outside range [-{}, {}]",
+                w,
+                limit,
+                limit
+            );
         }
 
         // Check variance is roughly correct
         let mean: f64 = weights.data.iter().sum::<f64>() / weights.data.len() as f64;
-        let variance: f64 = weights.data.iter()
+        let variance: f64 = weights
+            .data
+            .iter()
             .map(|&w| (w - mean).powi(2))
-            .sum::<f64>() / weights.data.len() as f64;
+            .sum::<f64>()
+            / weights.data.len() as f64;
 
         let expected_variance = 2.0 / (fan_in + fan_out);
 
         // Variance should be within 50% of expected (statistical test)
-        assert!(variance > expected_variance * 0.5 && variance < expected_variance * 1.5,
-                "Variance {} not close to expected {}", variance, expected_variance);
+        assert!(
+            variance > expected_variance * 0.5 && variance < expected_variance * 1.5,
+            "Variance {} not close to expected {}",
+            variance,
+            expected_variance
+        );
     }
 
     #[test]
@@ -147,16 +154,23 @@ mod tests {
 
         // Check variance is roughly correct
         let mean: f64 = weights.data.iter().sum::<f64>() / weights.data.len() as f64;
-        let variance: f64 = weights.data.iter()
+        let variance: f64 = weights
+            .data
+            .iter()
             .map(|&w| (w - mean).powi(2))
-            .sum::<f64>() / weights.data.len() as f64;
+            .sum::<f64>()
+            / weights.data.len() as f64;
 
         let fan_in = 20.0;
         let expected_variance = 2.0 / fan_in;
 
         // Variance should be within 50% of expected
-        assert!(variance > expected_variance * 0.5 && variance < expected_variance * 1.5,
-                "Variance {} not close to expected {}", variance, expected_variance);
+        assert!(
+            variance > expected_variance * 0.5 && variance < expected_variance * 1.5,
+            "Variance {} not close to expected {}",
+            variance,
+            expected_variance
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use linear_algebra::{matrix::Matrix, vectors::Vector};
-use neural_network::{NeuralNetwork, activation::ActivationType};
+use neural_network::{activation::ActivationType, NeuralNetwork};
 
 fn main() {
     println!("=== Neural Network XOR Problem Demo ===\n");
@@ -18,30 +18,36 @@ fn main() {
     // Training data
     let X = Matrix::from_vec(
         vec![
-            0.0, 0.0,  // Input: [0, 0]
-            0.0, 1.0,  // Input: [0, 1]
-            1.0, 0.0,  // Input: [1, 0]
-            1.0, 1.0,  // Input: [1, 1]
+            0.0, 0.0, // Input: [0, 0]
+            0.0, 1.0, // Input: [0, 1]
+            1.0, 0.0, // Input: [1, 0]
+            1.0, 1.0, // Input: [1, 1]
         ],
-        4,  // 4 samples
-        2,  // 2 features
-    ).unwrap();
+        4, // 4 samples
+        2, // 2 features
+    )
+    .unwrap();
 
     let y = Matrix::from_vec(
         vec![
-            0.0,  // 0 XOR 0 = 0
-            1.0,  // 0 XOR 1 = 1
-            1.0,  // 1 XOR 0 = 1
-            0.0,  // 1 XOR 1 = 0
+            0.0, // 0 XOR 0 = 0
+            1.0, // 0 XOR 1 = 1
+            1.0, // 1 XOR 0 = 1
+            0.0, // 1 XOR 1 = 0
         ],
-        4,  // 4 samples
-        1,  // 1 output
-    ).unwrap();
+        4, // 4 samples
+        1, // 1 output
+    )
+    .unwrap();
 
     println!("Training Data:");
     for i in 0..4 {
-        println!("  Input: [{:.0}, {:.0}] -> Target: {:.0}",
-                 X[(i, 0)], X[(i, 1)], y[(i, 0)]);
+        println!(
+            "  Input: [{:.0}, {:.0}] -> Target: {:.0}",
+            X[(i, 0)],
+            X[(i, 1)],
+            y[(i, 0)]
+        );
     }
     println!();
 
@@ -55,29 +61,37 @@ fn main() {
     println!();
 
     let mut nn = NeuralNetwork::new(
-        &[2, 4, 1],  // Layer sizes
-        &[ActivationType::Tanh, ActivationType::Sigmoid],  // Activations
-        0.5,  // Learning rate
+        &[2, 4, 1],                                       // Layer sizes
+        &[ActivationType::Tanh, ActivationType::Sigmoid], // Activations
+        0.5,                                              // Learning rate
     );
 
     // Train the network
     println!("Training for 1000 epochs...");
     let epochs = 1000;
-    let snapshot_interval = 200;  // Save snapshots every 200 epochs
+    let snapshot_interval = 200; // Save snapshots every 200 epochs
 
     nn.fit(&X, &y, epochs, snapshot_interval);
 
     // Show training progress
     println!("\nTraining Progress:");
     let history_len = nn.history.losses.len();
-    let checkpoints = vec![0, history_len / 4, history_len / 2, 3 * history_len / 4, history_len - 1];
+    let checkpoints = vec![
+        0,
+        history_len / 4,
+        history_len / 2,
+        3 * history_len / 4,
+        history_len - 1,
+    ];
 
     for &idx in &checkpoints {
         if idx < history_len {
-            println!("  Epoch {:4}: Loss = {:.6}, Accuracy = {:.2}%",
-                     idx + 1,
-                     nn.history.losses[idx],
-                     nn.history.accuracies[idx] * 100.0);
+            println!(
+                "  Epoch {:4}: Loss = {:.6}, Accuracy = {:.2}%",
+                idx + 1,
+                nn.history.losses[idx],
+                nn.history.accuracies[idx] * 100.0
+            );
         }
     }
     println!();
@@ -96,10 +110,16 @@ fn main() {
         let target = y[(i, 0)];
         let prediction = predictions[(i, 0)];
         let predicted_class = if prediction > 0.5 { 1 } else { 0 };
-        let correct = if (predicted_class as f64 - target).abs() < 0.1 { "✓" } else { "✗" };
+        let correct = if (predicted_class as f64 - target).abs() < 0.1 {
+            "✓"
+        } else {
+            "✗"
+        };
 
-        println!("│ [{}, {}]      │   {:.0}    │   {:.4}    │    {}    │",
-                 input_0, input_1, target, prediction, correct);
+        println!(
+            "│ [{}, {}]      │   {:.0}    │   {:.4}    │    {}    │",
+            input_0, input_1, target, prediction, correct
+        );
     }
 
     println!("└───────────┴────────┴────────────┴─────────┘");

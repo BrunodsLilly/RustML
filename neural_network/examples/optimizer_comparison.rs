@@ -18,8 +18,8 @@
 //! This is pedagogical code in the spirit of Andrej Karpathy - we'll explain what's happening
 //! and why each optimizer behaves the way it does.
 
-use neural_network::optimizer::Optimizer;
 use linear_algebra::matrix::Matrix;
+use neural_network::optimizer::Optimizer;
 
 // ============================================================================
 // The Rosenbrock Function
@@ -70,16 +70,26 @@ fn print_path_ascii(name: &str, path: &[(f64, f64)]) {
             let dy = next_y - y;
 
             if dx.abs() > dy.abs() {
-                if dx > 0.0 { "→" } else { "←" }
+                if dx > 0.0 {
+                    "→"
+                } else {
+                    "←"
+                }
             } else {
-                if dy > 0.0 { "↑" } else { "↓" }
+                if dy > 0.0 {
+                    "↑"
+                } else {
+                    "↓"
+                }
             }
         } else {
             "★" // Star for the end point
         };
 
-        println!("  Iter {:4}: ({:7.4}, {:7.4})  loss={:10.6}  {}",
-                 i, x, y, loss, direction);
+        println!(
+            "  Iter {:4}: ({:7.4}, {:7.4})  loss={:10.6}  {}",
+            i, x, y, loss, direction
+        );
     }
 }
 
@@ -101,9 +111,21 @@ fn main() {
     // Note: Learning rates are different because optimizers have different sensitivities
     let optimizers = vec![
         ("SGD", Optimizer::sgd(0.0001), "Vanilla gradient descent"),
-        ("Momentum", Optimizer::momentum(0.0001, 0.9), "Accumulates velocity (β₁=0.9)"),
-        ("RMSprop", Optimizer::rmsprop(0.001, 0.999, 1e-8), "Adaptive per-parameter rates"),
-        ("Adam", Optimizer::adam(0.001, 0.9, 0.999, 1e-8), "Momentum + Adaptive rates"),
+        (
+            "Momentum",
+            Optimizer::momentum(0.0001, 0.9),
+            "Accumulates velocity (β₁=0.9)",
+        ),
+        (
+            "RMSprop",
+            Optimizer::rmsprop(0.001, 0.999, 1e-8),
+            "Adaptive per-parameter rates",
+        ),
+        (
+            "Adam",
+            Optimizer::adam(0.001, 0.9, 0.999, 1e-8),
+            "Momentum + Adaptive rates",
+        ),
     ];
 
     let starting_point = (-1.0, 1.0);
@@ -118,11 +140,8 @@ fn main() {
         println!("─────────────────────────────────────────────────────────────\n");
 
         // Initialize at starting point
-        let mut weights = Matrix::from_vec(
-            vec![starting_point.0, starting_point.1],
-            1,
-            2
-        ).expect("Failed to create matrix");
+        let mut weights = Matrix::from_vec(vec![starting_point.0, starting_point.1], 1, 2)
+            .expect("Failed to create matrix");
 
         let layer_shapes = vec![(1, 2)];
 
@@ -137,8 +156,8 @@ fn main() {
 
             // Compute gradient
             let (dx, dy) = rosenbrock_gradient(x, y);
-            let gradient = Matrix::from_vec(vec![dx, dy], 1, 2)
-                .expect("Failed to create gradient matrix");
+            let gradient =
+                Matrix::from_vec(vec![dx, dy], 1, 2).expect("Failed to create gradient matrix");
 
             // Update weights
             opt.update_weights(0, &gradient, &mut weights, &layer_shapes);
@@ -153,31 +172,40 @@ fn main() {
         let final_x = weights[(0, 0)];
         let final_y = weights[(0, 1)];
         let final_loss = rosenbrock(final_x, final_y);
-        let distance_to_target = (
-            (final_x - target_point.0).powi(2) +
-            (final_y - target_point.1).powi(2)
-        ).sqrt();
+        let distance_to_target =
+            ((final_x - target_point.0).powi(2) + (final_y - target_point.1).powi(2)).sqrt();
 
         // Calculate path length (total distance traveled)
-        let path_length: f64 = path.windows(2)
+        let path_length: f64 = path
+            .windows(2)
             .map(|w| {
                 let dx = w[1].0 - w[0].0;
                 let dy = w[1].1 - w[0].1;
-                (dx*dx + dy*dy).sqrt()
+                (dx * dx + dy * dy).sqrt()
             })
             .sum();
 
         // Print results
         println!("Results after {} iterations:", max_iterations);
-        println!("  Initial:  ({:7.4}, {:7.4})  loss = {:.6}",
-                 starting_point.0, starting_point.1, initial_loss);
-        println!("  Final:    ({:7.4}, {:7.4})  loss = {:.6}",
-                 final_x, final_y, final_loss);
-        println!("  Target:   ({:7.4}, {:7.4})  loss = {:.6}",
-                 target_point.0, target_point.1, 0.0);
+        println!(
+            "  Initial:  ({:7.4}, {:7.4})  loss = {:.6}",
+            starting_point.0, starting_point.1, initial_loss
+        );
+        println!(
+            "  Final:    ({:7.4}, {:7.4})  loss = {:.6}",
+            final_x, final_y, final_loss
+        );
+        println!(
+            "  Target:   ({:7.4}, {:7.4})  loss = {:.6}",
+            target_point.0, target_point.1, 0.0
+        );
         println!();
-        println!("  Loss reduction: {:.2}x  ({:.6} → {:.6})",
-                 initial_loss / final_loss, initial_loss, final_loss);
+        println!(
+            "  Loss reduction: {:.2}x  ({:.6} → {:.6})",
+            initial_loss / final_loss,
+            initial_loss,
+            final_loss
+        );
         println!("  Distance to target: {:.6}", distance_to_target);
         println!("  Path length: {:.4}", path_length);
 

@@ -12,10 +12,10 @@
 //!
 //! This is impossible with pure JavaScript. WASM makes it trivial.
 
+use super::loss_functions::{HeatmapCache, LossFunction};
 use dioxus::prelude::*;
 use neural_network::optimizer::Optimizer;
 use std::time::Duration;
-use super::loss_functions::{LossFunction, HeatmapCache};
 
 /// Maximum iterations per frame to maintain 60 FPS
 const ITERATIONS_PER_FRAME: usize = 100;
@@ -147,9 +147,7 @@ pub fn OptimizerDemo() -> Element {
     });
 
     // Heatmap cache
-    let mut heatmap = use_signal(|| {
-        HeatmapCache::new(loss_function(), HEATMAP_RESOLUTION)
-    });
+    let mut heatmap = use_signal(|| HeatmapCache::new(loss_function(), HEATMAP_RESOLUTION));
 
     // Performance metrics
     let mut metrics = use_signal(|| PerformanceMetrics {
@@ -529,13 +527,9 @@ fn LossLandscape(
     let height = 600.0;
 
     // Transform functions
-    let to_svg_x = |x: f64| -> f64 {
-        ((x - x_min) / (x_max - x_min)) * width
-    };
+    let to_svg_x = |x: f64| -> f64 { ((x - x_min) / (x_max - x_min)) * width };
 
-    let to_svg_y = |y: f64| -> f64 {
-        ((y - y_min) / (y_max - y_min)) * height
-    };
+    let to_svg_y = |y: f64| -> f64 { ((y - y_min) / (y_max - y_min)) * height };
 
     rsx! {
         div {

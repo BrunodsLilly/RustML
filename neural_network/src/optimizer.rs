@@ -277,7 +277,9 @@ impl Optimizer {
                     .collect();
                 self.velocity_bias = layer_shapes
                     .iter()
-                    .map(|&(rows, _)| Vector { data: vec![0.0; rows] })
+                    .map(|&(rows, _)| Vector {
+                        data: vec![0.0; rows],
+                    })
                     .collect();
             }
             OptimizerType::RMSprop => {
@@ -288,7 +290,9 @@ impl Optimizer {
                     .collect();
                 self.squared_gradients_bias = layer_shapes
                     .iter()
-                    .map(|&(rows, _)| Vector { data: vec![0.0; rows] })
+                    .map(|&(rows, _)| Vector {
+                        data: vec![0.0; rows],
+                    })
                     .collect();
             }
             OptimizerType::Adam => {
@@ -299,7 +303,9 @@ impl Optimizer {
                     .collect();
                 self.velocity_bias = layer_shapes
                     .iter()
-                    .map(|&(rows, _)| Vector { data: vec![0.0; rows] })
+                    .map(|&(rows, _)| Vector {
+                        data: vec![0.0; rows],
+                    })
                     .collect();
                 self.squared_gradients_weights = layer_shapes
                     .iter()
@@ -307,7 +313,9 @@ impl Optimizer {
                     .collect();
                 self.squared_gradients_bias = layer_shapes
                     .iter()
-                    .map(|&(rows, _)| Vector { data: vec![0.0; rows] })
+                    .map(|&(rows, _)| Vector {
+                        data: vec![0.0; rows],
+                    })
                     .collect();
             }
         }
@@ -328,7 +336,10 @@ impl Optimizer {
         layer_shapes: &[(usize, usize)],
     ) {
         // Lazy initialization on first use
-        if self.requires_state() && self.velocity_weights.is_empty() && self.squared_gradients_weights.is_empty() {
+        if self.requires_state()
+            && self.velocity_weights.is_empty()
+            && self.squared_gradients_weights.is_empty()
+        {
             self.initialize_state(layer_shapes);
         }
 
@@ -362,7 +373,8 @@ impl Optimizer {
                     for j in 0..weights.cols {
                         let grad = gradient[(i, j)];
                         s[(i, j)] = self.beta2 * s[(i, j)] + (1.0 - self.beta2) * grad * grad;
-                        weights[(i, j)] -= self.learning_rate * grad / (s[(i, j)] + self.epsilon).sqrt();
+                        weights[(i, j)] -=
+                            self.learning_rate * grad / (s[(i, j)] + self.epsilon).sqrt();
                     }
                 }
             }
@@ -395,7 +407,8 @@ impl Optimizer {
                         let m_hat = m[(i, j)] / bias_correction_m;
                         let v_hat = v[(i, j)] / bias_correction_v;
 
-                        weights[(i, j)] -= self.learning_rate * m_hat / (v_hat.sqrt() + self.epsilon);
+                        weights[(i, j)] -=
+                            self.learning_rate * m_hat / (v_hat.sqrt() + self.epsilon);
                     }
                 }
             }
@@ -417,7 +430,10 @@ impl Optimizer {
         layer_shapes: &[(usize, usize)],
     ) {
         // Lazy initialization on first use
-        if self.requires_state() && self.velocity_bias.is_empty() && self.squared_gradients_bias.is_empty() {
+        if self.requires_state()
+            && self.velocity_bias.is_empty()
+            && self.squared_gradients_bias.is_empty()
+        {
             self.initialize_state(layer_shapes);
         }
 
@@ -561,8 +577,10 @@ impl Optimizer {
                 self.squared_grad_2d.1 =
                     self.beta2 * self.squared_grad_2d.1 + (1.0 - self.beta2) * dy * dy;
 
-                let new_x = x - self.learning_rate * dx / (self.squared_grad_2d.0 + self.epsilon).sqrt();
-                let new_y = y - self.learning_rate * dy / (self.squared_grad_2d.1 + self.epsilon).sqrt();
+                let new_x =
+                    x - self.learning_rate * dx / (self.squared_grad_2d.0 + self.epsilon).sqrt();
+                let new_y =
+                    y - self.learning_rate * dy / (self.squared_grad_2d.1 + self.epsilon).sqrt();
 
                 (new_x, new_y)
             }
