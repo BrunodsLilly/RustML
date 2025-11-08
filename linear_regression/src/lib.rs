@@ -173,7 +173,10 @@ impl LinearRegressor {
         }
 
         println!("\nTraining complete!");
-        println!("Final cost: {:.6}", self.training_history.last().unwrap_or(&0.0));
+        println!(
+            "Final cost: {:.6}",
+            self.training_history.last().unwrap_or(&0.0)
+        );
         println!("Weights: {:?}", self.weights.data);
         println!("Bias: {:.6}", self.bias);
     }
@@ -205,7 +208,10 @@ impl LinearRegressor {
 
             // Check for convergence
             if current_cost < tolerance {
-                println!("\nConverged at iteration {} with cost {:.6}", iter, current_cost);
+                println!(
+                    "\nConverged at iteration {} with cost {:.6}",
+                    iter, current_cost
+                );
                 break;
             }
 
@@ -245,6 +251,53 @@ impl LinearRegressor {
         }
     }
 }
+
+// Implement loader traits for LinearRegressor
+impl loader::Trainable for LinearRegressor {
+    type Error = String;
+
+    fn fit(&mut self, features: &Matrix<f64>, targets: &[f64]) -> Result<(), Self::Error> {
+        // Convert Vec<f64> targets to Vector<f64>
+        let y = Vector {
+            data: targets.to_vec(),
+        };
+
+        // Use the existing fit method with a default number of iterations
+        // Note: This uses 1000 iterations as a reasonable default
+        self.fit(features, &y, 1000);
+
+        Ok(())
+    }
+
+    fn loss_history(&self) -> Vec<f64> {
+        self.training_history.clone()
+    }
+}
+
+impl loader::Predictable for LinearRegressor {
+    type Error = String;
+
+    fn predict(&self, features: &Matrix<f64>) -> Result<Vec<f64>, Self::Error> {
+        if self.weights.data.is_empty() {
+            return Err("Model not trained: weights are empty".to_string());
+        }
+
+        if features.cols != self.weights.data.len() {
+            return Err(format!(
+                "Feature dimension mismatch: expected {}, got {}",
+                self.weights.data.len(),
+                features.cols
+            ));
+        }
+
+        // Use the existing predict method and convert Vector to Vec
+        let predictions = self.predict(features);
+        Ok(predictions.data)
+    }
+}
+
+// Auto-implement Model trait
+impl loader::Model for LinearRegressor {}
 
 #[cfg(test)]
 mod tests {

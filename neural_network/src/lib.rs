@@ -2,9 +2,9 @@ pub mod activation;
 pub mod initializer;
 pub mod optimizer;
 
-use linear_algebra::{matrix::Matrix, vectors::Vector};
 use activation::ActivationType;
 use initializer::Initializer;
+use linear_algebra::{matrix::Matrix, vectors::Vector};
 
 /// A single layer in the neural network
 #[derive(Debug, Clone)]
@@ -35,8 +35,12 @@ impl Layer {
     ) -> Self {
         let weights = initializer.initialize_matrix(n_outputs, n_inputs);
         let biases = initializer.initialize_vector(n_outputs);
-        let activations = Vector { data: vec![0.0; n_outputs] };
-        let z_values = Vector { data: vec![0.0; n_outputs] };
+        let activations = Vector {
+            data: vec![0.0; n_outputs],
+        };
+        let z_values = Vector {
+            data: vec![0.0; n_outputs],
+        };
 
         Layer {
             weights,
@@ -128,14 +132,16 @@ impl NeuralNetwork {
     ///     0.01
     /// );
     /// ```
-    pub fn new(
-        layer_sizes: &[usize],
-        activations: &[ActivationType],
-        learning_rate: f64,
-    ) -> Self {
-        assert!(layer_sizes.len() >= 2, "Need at least input and output layer");
-        assert_eq!(layer_sizes.len() - 1, activations.len(),
-                   "Need one activation per layer (excluding input)");
+    pub fn new(layer_sizes: &[usize], activations: &[ActivationType], learning_rate: f64) -> Self {
+        assert!(
+            layer_sizes.len() >= 2,
+            "Need at least input and output layer"
+        );
+        assert_eq!(
+            layer_sizes.len() - 1,
+            activations.len(),
+            "Need one activation per layer (excluding input)"
+        );
 
         let mut layers = Vec::new();
 
@@ -276,7 +282,13 @@ impl NeuralNetwork {
     /// * `y` - Target matrix (n_samples × n_outputs)
     /// * `epochs` - Number of training epochs
     /// * `snapshot_interval` - Save snapshots every N epochs (0 = no snapshots)
-    pub fn fit(&mut self, X: &Matrix<f64>, y: &Matrix<f64>, epochs: usize, snapshot_interval: usize) {
+    pub fn fit(
+        &mut self,
+        X: &Matrix<f64>,
+        y: &Matrix<f64>,
+        epochs: usize,
+        snapshot_interval: usize,
+    ) {
         self.history = TrainingHistory::new();
 
         for epoch in 0..epochs {
@@ -289,12 +301,16 @@ impl NeuralNetwork {
 
             // Save snapshots for animation
             if snapshot_interval > 0 && epoch % snapshot_interval == 0 {
-                let weight_snapshot: Vec<Matrix<f64>> = self.layers.iter()
+                let weight_snapshot: Vec<Matrix<f64>> = self
+                    .layers
+                    .iter()
                     .map(|layer| layer.weights.clone())
                     .collect();
                 self.history.weight_snapshots.push(weight_snapshot);
 
-                let activation_snapshot: Vec<Vector<f64>> = self.layers.iter()
+                let activation_snapshot: Vec<Vector<f64>> = self
+                    .layers
+                    .iter()
                     .map(|layer| layer.activations.clone())
                     .collect();
                 self.history.activation_snapshots.push(activation_snapshot);
@@ -318,14 +334,21 @@ impl NeuralNetwork {
             predictions.extend(output.data);
         }
 
-        Matrix::from_vec(predictions, X.rows, self.layers.last().unwrap().weights.rows).unwrap()
+        Matrix::from_vec(
+            predictions,
+            X.rows,
+            self.layers.last().unwrap().weights.rows,
+        )
+        .unwrap()
     }
 
     /// Mean Squared Error loss
     fn mse_loss(predictions: &Vector<f64>, targets: &Vector<f64>) -> f64 {
         assert_eq!(predictions.data.len(), targets.data.len());
 
-        let sum_squared_error: f64 = predictions.data.iter()
+        let sum_squared_error: f64 = predictions
+            .data
+            .iter()
             .zip(targets.data.iter())
             .map(|(pred, target)| (pred - target).powi(2))
             .sum();
@@ -342,7 +365,9 @@ impl NeuralNetwork {
     ) -> Vector<f64> {
         let derivatives = activation.derivative_vector(&z_values.data);
 
-        let error_data: Vec<f64> = output.data.iter()
+        let error_data: Vec<f64> = output
+            .data
+            .iter()
             .zip(target.data.iter())
             .zip(derivatives.iter())
             .map(|((out, targ), deriv)| (out - targ) * deriv)
@@ -366,7 +391,9 @@ impl NeuralNetwork {
         let derivatives = activation.derivative_vector(&z_values.data);
 
         // Element-wise multiplication
-        let error_data: Vec<f64> = weighted_error.data.iter()
+        let error_data: Vec<f64> = weighted_error
+            .data
+            .iter()
             .zip(derivatives.iter())
             .map(|(err, deriv)| err * deriv)
             .collect();
@@ -413,7 +440,8 @@ impl NeuralNetwork {
 
     /// Find index of maximum value
     fn argmax(values: &[f64]) -> usize {
-        values.iter()
+        values
+            .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .map(|(idx, _)| idx)
@@ -440,7 +468,9 @@ mod tests {
         let mut layer = Layer::new(3, 2, ActivationType::ReLU, Initializer::Zeros);
 
         // With zero weights, ReLU should output zeros
-        let input = Vector { data: vec![1.0, 2.0, 3.0] };
+        let input = Vector {
+            data: vec![1.0, 2.0, 3.0],
+        };
         let output = layer.forward(&input);
 
         assert_eq!(output.data.len(), 2);
@@ -452,13 +482,17 @@ mod tests {
     fn test_network_creation() {
         let nn = NeuralNetwork::new(
             &[2, 4, 3, 2],
-            &[ActivationType::ReLU, ActivationType::ReLU, ActivationType::Sigmoid],
+            &[
+                ActivationType::ReLU,
+                ActivationType::ReLU,
+                ActivationType::Sigmoid,
+            ],
             0.01,
         );
 
         assert_eq!(nn.layers.len(), 3);
-        assert_eq!(nn.layers[0].weights.cols, 2);  // Input layer
-        assert_eq!(nn.layers[2].weights.rows, 2);  // Output layer
+        assert_eq!(nn.layers[0].weights.cols, 2); // Input layer
+        assert_eq!(nn.layers[2].weights.rows, 2); // Output layer
     }
 
     #[test]
@@ -469,7 +503,9 @@ mod tests {
             0.01,
         );
 
-        let input = Vector { data: vec![1.0, 0.5] };
+        let input = Vector {
+            data: vec![1.0, 0.5],
+        };
         let output = nn.forward(&input);
 
         assert_eq!(output.data.len(), 1);
@@ -480,27 +516,9 @@ mod tests {
     #[test]
     fn test_xor_problem() {
         // XOR is the classic non-linearly separable problem
-        let X = Matrix::from_vec(
-            vec![
-                0.0, 0.0,
-                0.0, 1.0,
-                1.0, 0.0,
-                1.0, 1.0,
-            ],
-            4,
-            2,
-        ).unwrap();
+        let X = Matrix::from_vec(vec![0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0], 4, 2).unwrap();
 
-        let y = Matrix::from_vec(
-            vec![
-                0.0,
-                1.0,
-                1.0,
-                0.0,
-            ],
-            4,
-            1,
-        ).unwrap();
+        let y = Matrix::from_vec(vec![0.0, 1.0, 1.0, 0.0], 4, 1).unwrap();
 
         let mut nn = NeuralNetwork::new(
             &[2, 4, 1],
@@ -518,16 +536,20 @@ mod tests {
         let predictions = nn.predict(&X);
 
         // Should be close to XOR outputs
-        assert!(predictions[(0, 0)] < 0.3);  // 0 XOR 0 = 0
-        assert!(predictions[(1, 0)] > 0.7);  // 0 XOR 1 = 1
-        assert!(predictions[(2, 0)] > 0.7);  // 1 XOR 0 = 1
-        assert!(predictions[(3, 0)] < 0.3);  // 1 XOR 1 = 0
+        assert!(predictions[(0, 0)] < 0.3); // 0 XOR 0 = 0
+        assert!(predictions[(1, 0)] > 0.7); // 0 XOR 1 = 1
+        assert!(predictions[(2, 0)] > 0.7); // 1 XOR 0 = 1
+        assert!(predictions[(3, 0)] < 0.3); // 1 XOR 1 = 0
     }
 
     #[test]
     fn test_mse_loss() {
-        let predictions = Vector { data: vec![0.9, 0.1, 0.5] };
-        let targets = Vector { data: vec![1.0, 0.0, 0.5] };
+        let predictions = Vector {
+            data: vec![0.9, 0.1, 0.5],
+        };
+        let targets = Vector {
+            data: vec![1.0, 0.0, 0.5],
+        };
 
         let loss = NeuralNetwork::mse_loss(&predictions, &targets);
 
