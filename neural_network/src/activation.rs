@@ -43,14 +43,18 @@ impl ActivationType {
             ActivationType::Sigmoid => {
                 let a = self.activate(z);
                 a * (1.0 - a)
-            },
+            }
             ActivationType::ReLU => {
-                if z > 0.0 { 1.0 } else { 0.0 }
-            },
+                if z > 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             ActivationType::Tanh => {
                 let a = self.activate(z);
                 1.0 - a * a
-            },
+            }
             ActivationType::Linear => 1.0,
         }
     }
@@ -212,8 +216,8 @@ mod tests {
 
         assert_eq!(output.len(), 3);
         assert_relative_eq!(output[0], 0.5, epsilon = 1e-10);
-        assert!(output[1] > 0.7);  // sigmoid(1) ≈ 0.731
-        assert!(output[2] < 0.3);  // sigmoid(-1) ≈ 0.269
+        assert!(output[1] > 0.7); // sigmoid(1) ≈ 0.731
+        assert!(output[2] < 0.3); // sigmoid(-1) ≈ 0.269
     }
 
     #[test]

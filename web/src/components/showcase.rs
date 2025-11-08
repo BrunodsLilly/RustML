@@ -218,33 +218,23 @@ fn MatrixOperationsDemo() -> Element {
     let mut v2 = use_signal(|| 2.0);
 
     // Compute results
-    let matrix_a = use_memo(move || {
-        Matrix::from_vec(vec![a11(), a12(), a21(), a22()], 2, 2).unwrap()
+    let matrix_a =
+        use_memo(move || Matrix::from_vec(vec![a11(), a12(), a21(), a22()], 2, 2).unwrap());
+
+    let matrix_b =
+        use_memo(move || Matrix::from_vec(vec![b11(), b12(), b21(), b22()], 2, 2).unwrap());
+
+    let vector_v = use_memo(move || Vector {
+        data: vec![v1(), v2()],
     });
 
-    let matrix_b = use_memo(move || {
-        Matrix::from_vec(vec![b11(), b12(), b21(), b22()], 2, 2).unwrap()
-    });
+    let result_add = use_memo(move || matrix_a() + matrix_b());
 
-    let vector_v = use_memo(move || {
-        Vector { data: vec![v1(), v2()] }
-    });
+    let result_mul = use_memo(move || matrix_a() * matrix_b());
 
-    let result_add = use_memo(move || {
-        matrix_a() + matrix_b()
-    });
+    let result_transpose = use_memo(move || matrix_a().transpose());
 
-    let result_mul = use_memo(move || {
-        matrix_a() * matrix_b()
-    });
-
-    let result_transpose = use_memo(move || {
-        matrix_a().transpose()
-    });
-
-    let result_mat_vec = use_memo(move || {
-        matrix_a() * vector_v()
-    });
+    let result_mat_vec = use_memo(move || matrix_a() * vector_v());
 
     rsx! {
         section { class: "demo-section matrix-ops",
@@ -486,12 +476,17 @@ fn MatrixOperationsDemo() -> Element {
 #[component]
 fn GradientDescentDemo() -> Element {
     // Training state
-    let mut training_data = use_signal(|| vec![(1.0, 3.0), (2.0, 5.0), (3.0, 7.0), (4.0, 9.0), (5.0, 11.0)]);
+    let mut training_data =
+        use_signal(|| vec![(1.0, 3.0), (2.0, 5.0), (3.0, 7.0), (4.0, 9.0), (5.0, 11.0)]);
     let mut is_training = use_signal(|| false);
     let mut trained_model = use_signal(|| None::<LinearRegressor>);
     let mut training_progress = use_signal(|| Vec::<f64>::new());
     let mut learning_rate = use_signal(|| 0.01);
     let mut iterations = use_signal(|| 500);
+
+    // CSV upload state
+    let mut use_csv = use_signal(|| false);
+    let mut csv_dataset = use_signal(|| Option::<loader::CsvDataset>::None);
 
     // Input for new data point
     let mut new_x = use_signal(|| String::from("6"));
@@ -500,28 +495,47 @@ fn GradientDescentDemo() -> Element {
     let train_model = move |_| {
         is_training.set(true);
 
-        // Prepare training data
-        let data = training_data();
-        if data.is_empty() {
-            is_training.set(false);
-            return;
+        if use_csv() {
+            // Train on CSV data
+            if let Some(dataset) = csv_dataset() {
+                let mut model = LinearRegressor::new(learning_rate());
+                model.fit(
+                    &dataset.features,
+                    &Vector {
+                        data: dataset.targets.clone(),
+                    },
+                    iterations(),
+                );
+
+                // Store results
+                training_progress.set(model.training_history.clone());
+                trained_model.set(Some(model));
+            }
+        } else {
+            // Train on preset/manual data
+            let data = training_data();
+            if data.is_empty() {
+                is_training.set(false);
+                return;
+            }
+
+            let x_vals: Vec<f64> = data.iter().map(|(x, _)| *x).collect();
+            let y_vals: Vec<f64> = data.iter().map(|(_, y)| *y).collect();
+
+            // Create matrix and vector
+            let n = x_vals.len();
+            let X = Matrix::from_vec(x_vals, n, 1).unwrap();
+            let y = Vector { data: y_vals };
+
+            // Train model
+            let mut model = LinearRegressor::new(learning_rate());
+            model.fit(&X, &y, iterations());
+
+            // Store results
+            training_progress.set(model.training_history.clone());
+            trained_model.set(Some(model));
         }
 
-        let x_vals: Vec<f64> = data.iter().map(|(x, _)| *x).collect();
-        let y_vals: Vec<f64> = data.iter().map(|(_, y)| *y).collect();
-
-        // Create matrix and vector
-        let n = x_vals.len();
-        let X = Matrix::from_vec(x_vals, n, 1).unwrap();
-        let y = Vector { data: y_vals };
-
-        // Train model
-        let mut model = LinearRegressor::new(learning_rate());
-        model.fit(&X, &y, iterations());
-
-        // Store results
-        training_progress.set(model.training_history.clone());
-        trained_model.set(Some(model));
         is_training.set(false);
     };
 
@@ -549,6 +563,11 @@ fn GradientDescentDemo() -> Element {
         training_progress.set(vec![]);
     };
 
+    let on_csv_loaded = move |dataset: loader::CsvDataset| {
+        csv_dataset.set(Some(dataset));
+        trained_model.set(None); // Reset model when new data is loaded
+    };
+
     rsx! {
         section { class: "demo-section gradient-descent",
             h2 { "🎯 Interactive Gradient Descent Trainer" }
@@ -559,7 +578,45 @@ fn GradientDescentDemo() -> Element {
                 div { class: "trainer-panel",
                     h3 { "Training Data" }
 
-                    div { class: "preset-buttons",
+                    // Data source toggle
+                    div { class: "data-source-toggle",
+                        label {
+                            input {
+                                r#type: "radio",
+                                name: "data-source",
+                                value: "preset",
+                                checked: !use_csv(),
+                                onchange: move |_| use_csv.set(false),
+                            }
+                            " Use Preset Data"
+                        }
+                        label {
+                            input {
+                                r#type: "radio",
+                                name: "data-source",
+                                value: "csv",
+                                checked: use_csv(),
+                                onchange: move |_| use_csv.set(true),
+                            }
+                            " Upload CSV"
+                        }
+                    }
+
+                    // Conditional rendering based on data source
+                    if use_csv() {
+                        // CSV Upload Interface
+                        CsvUploader { on_loaded: on_csv_loaded }
+
+                        // Display dataset info
+                        if let Some(dataset) = csv_dataset() {
+                            div { class: "dataset-info",
+                                p { "✓ Dataset loaded: {dataset.num_samples} samples" }
+                                p { "Features: {dataset.features.cols} ({dataset.feature_names.join(\", \")})" }
+                            }
+                        }
+                    } else {
+                        // Preset Data Interface
+                        div { class: "preset-buttons",
                         button {
                             onclick: move |_| load_preset("linear"),
                             "📈 Linear (y=2x+1)"
@@ -636,6 +693,7 @@ fn GradientDescentDemo() -> Element {
                             }
                         }
                     }
+                    } // end else (preset data interface)
                 }
 
                 // Middle: Training controls
