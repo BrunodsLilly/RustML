@@ -8,6 +8,12 @@ edition = "2021"
 
 [dependencies]
 dioxus = { version = "0.6.0", features = ["router"] }
+linear_algebra = { path = "../linear_algebra" }
+linear_regression = { path = "../linear_regression" }
+loader = { path = "../loader" }
+neural_network = { path = "../neural_network" }
+async-std = "1.12"
+getrandom = { version = "0.2", features = ["js"] }
 
 [features]
 default = ["web"]

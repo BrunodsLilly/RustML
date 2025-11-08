@@ -34,7 +34,7 @@ pub enum OptimizerType {
 }
 
 /// Gradient descent optimizer with support for multiple algorithms
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Optimizer {
     /// Type of optimization algorithm
     optimizer_type: OptimizerType,

@@ -7,4 +7,8 @@ pub enum Route {
     MainView,
     #[route("/courses")]
     CoursesView,
+    #[route("/showcase")]
+    ShowcaseView,
+    #[route("/optimizers")]
+    OptimizersView,
 }
