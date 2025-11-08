@@ -12,6 +12,11 @@ linear_algebra = { path = "../linear_algebra" }
 linear_regression = { path = "../linear_regression" }
 loader = { path = "../loader" }
 neural_network = { path = "../neural_network" }
+ml_traits = { path = "../ml_traits" }
+clustering = { path = "../clustering" }
+dimensionality_reduction = { path = "../dimensionality_reduction" }
+preprocessing = { path = "../preprocessing" }
+supervised = { path = "../supervised" }
 async-std = "1.12"
 csv = "1.3"
 getrandom = { version = "0.2", features = ["js"] }

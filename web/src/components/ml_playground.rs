@@ -5,6 +5,15 @@
 
 use dioxus::prelude::*;
 use loader::csv_loader::CsvDataset;
+use clustering::kmeans::KMeans;
+use dimensionality_reduction::pca::PCA;
+use preprocessing::scalers::{StandardScaler, MinMaxScaler};
+use supervised::logistic_regression::LogisticRegression;
+use ml_traits::clustering::Clusterer;
+use ml_traits::unsupervised::UnsupervisedModel;
+use ml_traits::preprocessing::Scaler;
+use ml_traits::supervised::{SupervisedModel, Classifier};
+use linear_algebra::matrix::Matrix;
 
 /// ML Playground component
 #[component]
@@ -146,10 +155,17 @@ pub fn MLPlayground() -> Element {
                             class: "run-button",
                             disabled: *is_processing.read(),
                             onclick: move |_| {
-                                is_processing.set(true);
-                                result_message.set(format!("🔄 Running {}...", selected_algorithm.read().name()));
-                                // In a real implementation, run the algorithm here
-                                is_processing.set(false);
+                                spawn(async move {
+                                    is_processing.set(true);
+                                    result_message.set(format!("🔄 Running {}...", selected_algorithm.read().name()));
+
+                                    if let Some(ref dataset) = *csv_dataset.read() {
+                                        let result = run_algorithm(*selected_algorithm.read(), dataset);
+                                        result_message.set(result);
+                                    }
+
+                                    is_processing.set(false);
+                                });
                             },
                             if *is_processing.read() {
                                 "Processing..."
@@ -330,3 +346,172 @@ fn AlgorithmExplanation(algorithm: Algorithm) -> Element {
         }
     }
 }
+
+/// Run the selected algorithm on the dataset and return a formatted result message
+fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset) -> String {
+    // For MVP, just show a success message with dataset info
+    // TODO: Actually run the algorithms once trait APIs are finalized
+    let samples = dataset.num_samples;
+    let features = dataset.features.cols;
+
+    match algorithm {
+        Algorithm::KMeans => {
+            format!("✅ K-Means Clustering ready!\n\nDataset: {} samples, {} features\n\nThis will cluster your data into 3 groups based on similarity.\n\n🚧 Full implementation coming soon!", samples, features)
+        },
+        Algorithm::PCA => {
+            format!("✅ PCA ready!\n\nDataset: {} samples, {} features\n\nThis will reduce dimensionality while preserving variance.\n\n🚧 Full implementation coming soon!", samples, features)
+        },
+        Algorithm::LogisticRegression => {
+            format!("✅ Logistic Regression ready!\n\nDataset: {} samples, {} features\nTarget column: {}\n\nThis will train a classification model.\n\n🚧 Full implementation coming soon!", samples, features, dataset.feature_names[0])
+        },
+        Algorithm::StandardScaler => {
+            format!("✅ Standard Scaler ready!\n\nDataset: {} samples, {} features\n\nThis will normalize features to μ=0, σ=1.\n\n🚧 Full implementation coming soon!", samples, features)
+        },
+        Algorithm::MinMaxScaler => {
+            format!("✅ MinMax Scaler ready!\n\nDataset: {} samples, {} features\n\nThis will scale features to [0, 1] range.\n\n🚧 Full implementation coming soon!", samples, features)
+        },
+    }
+}
+
+/*
+// Actual implementations - temporarily disabled until trait APIs are stable
+
+fn run_kmeans(dataset: &CsvDataset) -> String {
+    let k = 3; // Default to 3 clusters
+    let mut kmeans = KMeans::new(k, 100, 1e-4, Some(42));
+
+    match <KMeans as Clusterer<Matrix<f64>>>::fit(&mut kmeans, &dataset.features) {
+        Ok(_) => {
+            match <KMeans as Clusterer<Matrix<f64>>>::predict(&kmeans, &dataset.features) {
+                Ok(labels) => {
+                    // Count samples per cluster
+                    let mut counts = vec![0; k];
+                    for &label in &labels {
+                        counts[label] += 1;
+                    }
+
+                    let cluster_summary: Vec<String> = counts
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &count)| format!("Cluster {}: {} samples", i, count))
+                        .collect();
+
+                    format!(
+                        "✅ K-Means (k={}) completed!\n\n{}",
+                        k,
+                        cluster_summary.join("\n")
+                    )
+                }
+                Err(e) => format!("❌ Prediction failed: {}", e),
+            }
+        }
+        Err(e) => format!("❌ K-Means failed: {}", e),
+    }
+}
+
+fn run_pca(dataset: &CsvDataset) -> String {
+    let n_components = 2.min(dataset.features.cols); // Use 2 components or fewer if data has less
+    let mut pca = PCA::new(n_components);
+
+    match <PCA as UnsupervisedModel<Matrix<f64>, f64>>::fit(&mut pca, &dataset.features) {
+        Ok(_) => {
+            match <PCA as UnsupervisedModel<Matrix<f64>, f64>>::transform(&pca, &dataset.features) {
+                Ok(transformed) => {
+                    // Get explained variance if available
+                    let explained_text = format!("Reduced from {} to {} dimensions",
+                        dataset.features.cols,
+                        n_components);
+
+                    format!(
+                        "✅ PCA completed!\n\n{}",
+                        explained_text
+                    )
+                }
+                Err(e) => format!("❌ Transform failed: {}", e),
+            }
+        }
+        Err(e) => format!("❌ PCA failed: {}", e),
+    }
+}
+
+fn run_logistic_regression(dataset: &CsvDataset) -> String {
+    // Logistic regression requires labels (targets)
+    let mut model = LogisticRegression::new(0.01, 1000, 1e-4);
+
+    // Convert Matrix to slice of rows for SupervisedModel trait
+    let X_rows: Vec<Matrix<f64>> = (0..dataset.features.rows)
+        .map(|i| dataset.features.row(i).unwrap())
+        .collect();
+
+    match <LogisticRegression as SupervisedModel<f64, Matrix<f64>>>::fit(&mut model, &X_rows, &dataset.targets) {
+        Ok(_) => {
+            match <LogisticRegression as Classifier<f64, Matrix<f64>>>::predict(&model, &X_rows) {
+                Ok(predictions) => {
+                    // Calculate accuracy
+                    let mut correct = 0;
+                    for (i, &pred) in predictions.iter().enumerate() {
+                        if (pred - dataset.targets[i]).abs() < 0.5 {
+                            correct += 1;
+                        }
+                    }
+                    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+
+                    // Get unique classes
+                    let mut classes: Vec<f64> = dataset.targets.clone();
+                    classes.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    classes.dedup();
+
+                    format!(
+                        "✅ Logistic Regression completed!\n\nAccuracy: {:.2}%\nClasses: {}\nSamples: {}",
+                        accuracy,
+                        classes.len(),
+                        predictions.len()
+                    )
+                }
+                Err(e) => format!("❌ Prediction failed: {}", e),
+            }
+        }
+        Err(e) => format!("❌ Logistic Regression failed: {}", e),
+    }
+}
+
+fn run_standard_scaler(dataset: &CsvDataset) -> String {
+    let mut scaler = StandardScaler::new();
+
+    match <StandardScaler as Scaler<Matrix<f64>, f64>>::fit(&mut scaler, &dataset.features) {
+        Ok(_) => {
+            match <StandardScaler as Scaler<Matrix<f64>, f64>>::transform(&scaler, &dataset.features) {
+                Ok(scaled) => {
+                    format!(
+                        "✅ StandardScaler completed!\n\nScaled {} features to μ=0, σ=1\nTransformed {} samples",
+                        dataset.features.cols,
+                        scaled.len()
+                    )
+                }
+                Err(e) => format!("❌ Transform failed: {}", e),
+            }
+        }
+        Err(e) => format!("❌ StandardScaler failed: {}", e),
+    }
+}
+
+fn run_minmax_scaler(dataset: &CsvDataset) -> String {
+    let mut scaler = MinMaxScaler::new(0.0, 1.0);
+
+    match <MinMaxScaler as Scaler<Matrix<f64>, f64>>::fit(&mut scaler, &dataset.features) {
+        Ok(_) => {
+            match <MinMaxScaler as Scaler<Matrix<f64>, f64>>::transform(&scaler, &dataset.features) {
+                Ok(scaled) => {
+                    format!(
+                        "✅ MinMaxScaler completed!\n\nScaled {} features to [0, 1]\nTransformed {} samples",
+                        dataset.features.cols,
+                        scaled.len()
+                    )
+                }
+                Err(e) => format!("❌ Transform failed: {}", e),
+            }
+        }
+        Err(e) => format!("❌ MinMaxScaler failed: {}", e),
+    }
+}
+*/

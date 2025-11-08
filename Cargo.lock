@@ -5210,13 +5210,18 @@ name = "web"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "clustering",
  "csv",
+ "dimensionality_reduction",
  "dioxus",
  "getrandom 0.2.16",
  "linear_algebra",
  "linear_regression",
  "loader",
+ "ml_traits",
  "neural_network",
+ "preprocessing",
+ "supervised",
 ]
 
 [[package]]
