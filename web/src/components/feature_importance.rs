@@ -175,8 +175,8 @@ mod tests {
     fn test_standardized_coefficient_calculation() {
         // Feature with weight=2.0 and variance=4.0 (std=2.0)
         // Standardized coefficient = 2.0 * 2.0 = 4.0
-        let weight = 2.0;
-        let variance = 4.0;
+        let weight: f64 = 2.0;
+        let variance: f64 = 4.0;
         let std_dev = variance.sqrt();
         let standardized = weight * std_dev;
         assert_eq!(standardized, 4.0);
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn test_zero_variance_handling() {
         // Should not crash with zero variance
-        let variance = 0.0;
+        let variance: f64 = 0.0;
         let std_dev = variance.sqrt().max(1e-10);
         assert!(std_dev > 0.0);
     }
