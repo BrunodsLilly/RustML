@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [ "coursera_ml", "datasets", "linear_algebra", "linear_regression","loader", "neural_network", "notes", "plotting", "python_bindings", "web", "web", "web"]
+members = [ "coursera_ml", "datasets", "linear_algebra", "linear_regression", "loader", "ml_traits", "neural_network", "notes", "plotting", "python_bindings", "web"]
 
 [profile.wasm-dev]
 inherits = "dev"

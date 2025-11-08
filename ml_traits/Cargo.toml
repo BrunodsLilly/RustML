@@ -1,0 +1,9 @@
+[package]
+name = "ml_traits"
+version = "0.1.0"
+edition = "2021"
+authors = ["Bruno Santos"]
+description = "Core trait definitions for the RustML ecosystem"
+license = "MIT"
+
+[dependencies]
