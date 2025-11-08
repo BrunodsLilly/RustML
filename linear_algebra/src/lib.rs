@@ -1,4 +1,5 @@
-//! The purpose of this crate is to create reusable Lienar Algebra code.
+//! The purpose of this crate is to create reusable Linear Algebra code.
 
 pub mod matrix;
+pub mod statistics;
 pub mod vectors;
