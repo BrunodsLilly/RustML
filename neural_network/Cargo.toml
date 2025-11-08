@@ -1,0 +1,11 @@
+[package]
+name = "neural_network"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+linear_algebra = { path = "../linear_algebra" }
+rand = "0.8"
+
+[dev-dependencies]
+approx = "0.5"

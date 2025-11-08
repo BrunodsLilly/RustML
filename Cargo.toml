@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = [ "coursera_ml", "datasets", "linear_algebra", "linear_regression","loader", "neural_network", "notes", "plotting", "python_bindings", "web", "web", "web"]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"

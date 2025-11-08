@@ -1,0 +1,15 @@
+[package]
+name = "plotting"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+plotters = "0.3.7"
+
+[[bin]]
+name = "example"
+path = "src/bin/example.rs"
+
+[[bin]]
+name = "mesh"
+path = "src/bin/components.rs"
