@@ -555,18 +555,20 @@ fn LossLandscape(
                         let heatmap_clone = heatmap.clone();
 
                         // Flatten the 2D grid into a single iterator
-                        (0..resolution).flat_map(move |i| {
+                        // Standard indexing: row = y-axis, col = x-axis
+                        (0..resolution).flat_map(move |row| {
                             let heatmap_inner = heatmap_clone.clone();
-                            (0..resolution).map(move |j| {
-                                let normalized = heatmap_inner.normalized_value(i, j);
+                            (0..resolution).map(move |col| {
+                                let normalized = heatmap_inner.normalized_value(row, col);
                                 let (h, s, l) = heatmap_inner.value_to_color(normalized);
 
-                                let x = i as f64 * cell_width;
-                                let y = j as f64 * cell_height;
+                                // SVG coordinates: x = col, y = row
+                                let x = col as f64 * cell_width;
+                                let y = row as f64 * cell_height;
 
                                 rsx! {
                                     rect {
-                                        key: "{i}-{j}",
+                                        key: "{row}-{col}",
                                         x: "{x}",
                                         y: "{y}",
                                         width: "{cell_width}",

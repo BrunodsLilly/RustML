@@ -221,11 +221,12 @@ impl LossFunction {
         let ((x_min, x_max), (y_min, y_max)) = self.bounds();
         let mut grid = vec![vec![0.0; resolution]; resolution];
 
-        for i in 0..resolution {
-            let x = x_min + (x_max - x_min) * (i as f64 / (resolution - 1) as f64);
-            for j in 0..resolution {
-                let y = y_min + (y_max - y_min) * (j as f64 / (resolution - 1) as f64);
-                grid[i][j] = self.evaluate(x, y);
+        // Standard grid indexing: grid[row][col] where row = y-axis, col = x-axis
+        for row in 0..resolution {
+            let y = y_min + (y_max - y_min) * (row as f64 / (resolution - 1) as f64);
+            for col in 0..resolution {
+                let x = x_min + (x_max - x_min) * (col as f64 / (resolution - 1) as f64);
+                grid[row][col] = self.evaluate(x, y);
             }
         }
 
@@ -290,8 +291,12 @@ impl HeatmapCache {
     }
 
     /// Get normalized value (0.0 to 1.0) for color mapping
-    pub fn normalized_value(&self, i: usize, j: usize) -> f64 {
-        let val = self.grid[i][j];
+    ///
+    /// # Arguments
+    /// * `row` - Row index (y-axis)
+    /// * `col` - Column index (x-axis)
+    pub fn normalized_value(&self, row: usize, col: usize) -> f64 {
+        let val = self.grid[row][col];
         if !val.is_finite() {
             return 1.0;
         }
