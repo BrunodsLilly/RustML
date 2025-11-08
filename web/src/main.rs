@@ -13,6 +13,8 @@ enum Route {
     MainView,
     #[route("/courses")]
     CoursesView,
+    #[route("/showcase")]
+    ShowcaseView,
 }
 
 fn main() {

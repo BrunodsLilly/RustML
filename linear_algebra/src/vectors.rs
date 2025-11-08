@@ -3,7 +3,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 
 /// A vector for linear algebra
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Vector<T> {
     /// A standard vector
     pub data: Vec<T>,
