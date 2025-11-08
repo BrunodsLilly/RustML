@@ -1,7 +1,9 @@
 [package]
-name = "linear_algebra"
+name = "clustering"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 ml_traits = { path = "../ml_traits" }
+linear_algebra = { path = "../linear_algebra" }
+rand = "0.8"

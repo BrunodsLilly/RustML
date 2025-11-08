@@ -502,6 +502,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clustering"
+version = "0.1.0"
+dependencies = [
+ "linear_algebra",
+ "ml_traits",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "cocoa"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2767,6 +2776,9 @@ dependencies = [
 [[package]]
 name = "linear_algebra"
 version = "0.1.0"
+dependencies = [
+ "ml_traits",
+]
 
 [[package]]
 name = "linear_regression"

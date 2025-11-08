@@ -422,3 +422,26 @@ mod tests {
         assert_eq!(col1.data, vec![2, 5]);
     }
 }
+
+// Implement ml_traits::Data for Matrix<f64>
+impl ml_traits::Data<f64> for Matrix<f64> {
+    fn shape(&self) -> (usize, usize) {
+        (self.rows, self.cols)
+    }
+
+    fn get(&self, row: usize, col: usize) -> Option<f64> {
+        if row < self.rows && col < self.cols {
+            Some(self.data[row * self.cols + col])
+        } else {
+            None
+        }
+    }
+
+    fn n_samples(&self) -> usize {
+        self.rows
+    }
+
+    fn n_features(&self) -> usize {
+        self.cols
+    }
+}
