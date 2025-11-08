@@ -855,9 +855,20 @@ fn GradientDescentDemo() -> Element {
                 }
             }
 
-            // Scatter Plot Visualization
-            if let Some(model) = trained_model() {
-                if !training_data().is_empty() {
+            // Enhanced Visualizations for CSV data (multi-feature models)
+            if use_csv() {
+                if let (Some(model), Some(dataset)) = (trained_model(), csv_dataset()) {
+                    LinearRegressionVisualizer {
+                        model: model,
+                        dataset: dataset,
+                    }
+                }
+            }
+
+            // Scatter Plot Visualization (for simple preset data)
+            if !use_csv() {
+                if let Some(model) = trained_model() {
+                    if !training_data().is_empty() {
                     div { class: "scatter-plot-container",
                         h3 { "📈 Data Visualization" }
                         p { class: "subtitle", "Data points and learned regression line" }
@@ -1019,6 +1030,7 @@ fn GradientDescentDemo() -> Element {
                         }
                     }
                 }
+            }
             }
         }
     }
