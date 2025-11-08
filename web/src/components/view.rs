@@ -1,5 +1,5 @@
 use crate::components::*;
-use crate::routes::Route;
+use crate::Route;
 use dioxus::prelude::*;
 
 #[component]
