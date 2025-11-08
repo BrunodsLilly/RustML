@@ -4504,6 +4504,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "supervised"
+version = "0.1.0"
+dependencies = [
+ "linear_algebra",
+ "ml_traits",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
