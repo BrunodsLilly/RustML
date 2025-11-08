@@ -1,5 +1,4 @@
 mod components;
-mod routes;
 
 use crate::components::*;
 
@@ -15,6 +14,8 @@ enum Route {
     CoursesView,
     #[route("/showcase")]
     ShowcaseView,
+    #[route("/optimizers")]
+    OptimizersView,
 }
 
 fn main() {

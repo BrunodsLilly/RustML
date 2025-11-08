@@ -14,7 +14,7 @@
 
 use dioxus::prelude::*;
 use neural_network::optimizer::Optimizer;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use super::loss_functions::{LossFunction, HeatmapCache};
 
 /// Maximum iterations per frame to maintain 60 FPS
@@ -159,7 +159,7 @@ pub fn OptimizerDemo() -> Element {
         elapsed_seconds: 0.0,
     });
 
-    let start_time = use_signal(|| Instant::now());
+    let mut frame_count = use_signal(|| 0u64);
 
     // Training loop effect
     use_effect(move || {
@@ -175,7 +175,6 @@ pub fn OptimizerDemo() -> Element {
                     break;
                 }
 
-                let frame_start = Instant::now();
                 let loss_fn = loss_function();
 
                 // Compute iterations based on speed multiplier
@@ -189,15 +188,15 @@ pub fn OptimizerDemo() -> Element {
                 }
 
                 // Update metrics
-                let frame_time = frame_start.elapsed();
                 let total_iters = iters * 4; // 4 optimizers
-                let elapsed = start_time().elapsed().as_secs_f64();
+                frame_count.set(frame_count() + 1);
 
-                metrics.write().frame_time_ms = frame_time.as_secs_f64() * 1000.0;
-                metrics.write().iterations_per_second =
-                    (total_iters as f64 / frame_time.as_secs_f64()).round();
+                // Estimate metrics based on frame rate and iterations
+                let fps = 1000.0 / (interval.as_millis() as f64);
+                metrics.write().frame_time_ms = interval.as_millis() as f64;
+                metrics.write().iterations_per_second = (total_iters as f64 * fps).round();
                 metrics.write().total_computations += total_iters;
-                metrics.write().elapsed_seconds = elapsed;
+                metrics.write().elapsed_seconds = frame_count() as f64 / fps;
 
                 // Sleep to maintain frame rate
                 async_std::task::sleep(interval).await;
@@ -210,7 +209,7 @@ pub fn OptimizerDemo() -> Element {
         let loss_function = loss_function.clone();
         let mut optimizers = optimizers.clone();
         let mut metrics = metrics.clone();
-        let mut start_time = start_time.clone();
+        let mut frame_count = frame_count.clone();
 
         move || {
             let start = loss_function().starting_point();
@@ -218,7 +217,7 @@ pub fn OptimizerDemo() -> Element {
                 opt.reset(start);
             }
             metrics.write().total_computations = 0;
-            start_time.set(Instant::now());
+            frame_count.set(0);
         }
     };
 
