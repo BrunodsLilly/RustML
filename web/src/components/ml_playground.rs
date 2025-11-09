@@ -311,7 +311,7 @@ pub fn MLPlayground() -> Element {
                                             let current_algo = *selected_algorithm.read();
                                             if matches!(
                                                 current_algo,
-                                                Algorithm::NaiveBayes | Algorithm::DecisionTree | Algorithm::KMeans
+                                                Algorithm::NaiveBayes | Algorithm::DecisionTree | Algorithm::KMeans | Algorithm::PCA
                                             ) {
                                                 let algo_name = current_algo.name().to_string();
                                                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -324,6 +324,9 @@ pub fn MLPlayground() -> Element {
                                                         }
                                                         Algorithm::KMeans => {
                                                             run_kmeans(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::PCA => {
+                                                            run_pca(dataset, &algorithm_params.read())
                                                         }
                                                         _ => unreachable!(),
                                                     }
@@ -954,7 +957,19 @@ fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset, params: &AlgorithmP
                 Err(e) => format!("❌ K-Means failed: {}", e),
             }
         }
-        Algorithm::PCA => run_pca(dataset, params),
+        Algorithm::PCA => {
+            // PCA returns AlgorithmResults, convert to String for backward compatibility
+            match run_pca(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nReduced: {} → {} dimensions\nVariance: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.metrics.get("Original Dimensions").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Reduced Dimensions").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Variance Explained").map(|v| v.display()).unwrap_or("?".to_string())
+                ),
+                Err(e) => format!("❌ PCA failed: {}", e),
+            }
+        }
         Algorithm::LogisticRegression => run_logistic_regression(dataset, params),
         Algorithm::DecisionTree => {
             // DecisionTree returns AlgorithmResults, convert to String for backward compatibility
@@ -1051,27 +1066,80 @@ fn run_kmeans(dataset: &CsvDataset, params: &AlgorithmParams) -> Result<Algorith
     })
 }
 
-fn run_pca(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+fn run_pca(dataset: &CsvDataset, params: &AlgorithmParams) -> Result<AlgorithmResults, String> {
     let n_components = params.n_components.min(dataset.features.cols); // Use configured components or fewer if data has less
     let mut pca = PCA::new(n_components);
 
-    match pca.fit(&dataset.features) {
-        Ok(_) => {
-            match pca.transform(&dataset.features) {
-                Ok(_transformed) => {
-                    // Get explained variance if available
-                    let explained_text = format!(
-                        "Reduced from {} to {} dimensions",
-                        dataset.features.cols, n_components
-                    );
+    pca.fit(&dataset.features)?;
+    let transformed = pca.transform(&dataset.features)?;
 
-                    format!("✅ PCA completed!\n\n{}", explained_text)
-                }
-                Err(e) => format!("❌ Transform failed: {}", e),
-            }
-        }
-        Err(e) => format!("❌ PCA failed: {}", e),
+    // Get explained variance
+    let explained_variance = pca
+        .explained_variance()
+        .ok_or("PCA did not compute explained variance")?
+        .clone();
+
+    // Calculate cumulative variance
+    let mut cumulative_variance = Vec::new();
+    let mut sum = 0.0;
+    for &var in &explained_variance {
+        sum += var;
+        cumulative_variance.push(sum);
     }
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert(
+        "Original Dimensions".to_string(),
+        MetricValue::Integer(dataset.features.cols),
+    );
+    metrics.insert(
+        "Reduced Dimensions".to_string(),
+        MetricValue::Integer(n_components),
+    );
+    metrics.insert(
+        "Samples".to_string(),
+        MetricValue::Integer(dataset.features.rows),
+    );
+    metrics.insert(
+        "Variance Explained".to_string(),
+        MetricValue::Percentage(sum * 100.0),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Algorithm".to_string(), "PCA".to_string());
+    model_details.insert("Method".to_string(), "Eigenvalue Decomposition".to_string());
+    model_details.insert(
+        "Dimension Reduction".to_string(),
+        format!("{} → {}", dataset.features.cols, n_components),
+    );
+
+    // Create dummy "predictions" (component assignments for each sample)
+    // For PCA, we use the index of the strongest component for each sample
+    let predictions: Vec<usize> = (0..transformed.len())
+        .map(|i| {
+            transformed[i]
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.abs().partial_cmp(&b.abs()).unwrap())
+                .map(|(idx, _)| idx)
+                .unwrap_or(0)
+        })
+        .collect();
+
+    Ok(AlgorithmResults {
+        algorithm_name: "PCA (Principal Component Analysis)".to_string(),
+        accuracy: None, // Unsupervised - no accuracy
+        predictions,
+        actual_values: None, // Unsupervised - no ground truth
+        metrics,
+        visualizations: vec![Visualization::VarianceExplained {
+            explained_variance,
+            cumulative_variance,
+        }],
+        model_details,
+    })
 }
 
 fn run_logistic_regression(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
