@@ -19,7 +19,7 @@ pub fn PlaygroundView() -> Element {
 #[component]
 pub fn ArenaView() -> Element {
     rsx! {
-        AlgorithmArena {}
+        AlgorithmArenaSimple {}
     }
 }
 

@@ -1,4 +1,5 @@
-mod algorithm_arena;
+// mod algorithm_arena; // TODO: Fix rsx! compilation issue
+mod algorithm_arena_simple;
 mod coefficient_display;
 mod correlation_heatmap;
 mod csv_upload;
@@ -12,7 +13,8 @@ mod optimizer_race_controller;
 mod showcase;
 mod view;
 
-pub use algorithm_arena::*;
+// pub use algorithm_arena::*; // TODO: Fix rsx! compilation issue
+pub use algorithm_arena_simple::*;
 pub use coefficient_display::*;
 pub use correlation_heatmap::*;
 pub use csv_upload::*;
