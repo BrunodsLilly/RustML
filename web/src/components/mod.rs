@@ -1,3 +1,4 @@
+mod algorithm_arena;
 mod coefficient_display;
 mod correlation_heatmap;
 mod csv_upload;
@@ -10,6 +11,7 @@ mod optimizer_demo;
 mod showcase;
 mod view;
 
+pub use algorithm_arena::*;
 pub use coefficient_display::*;
 pub use correlation_heatmap::*;
 pub use csv_upload::*;

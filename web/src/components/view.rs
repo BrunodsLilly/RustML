@@ -17,6 +17,13 @@ pub fn PlaygroundView() -> Element {
 }
 
 #[component]
+pub fn ArenaView() -> Element {
+    rsx! {
+        AlgorithmArena {}
+    }
+}
+
+#[component]
 pub fn MainView() -> Element {
     rsx! {
         div { id: "main",
@@ -48,6 +55,14 @@ pub fn MainView() -> Element {
                             class: "link_class",
                             to: Route::PlaygroundView {},
                             "🚀 ML Playground"
+                        }
+                    }
+                    li {
+                        Link {
+                            active_class: "active",
+                            class: "link_class",
+                            to: Route::ArenaView {},
+                            "🏁 ML Algorithm Arena"
                         }
                     }
                     li {
