@@ -307,10 +307,20 @@ pub fn MLPlayground() -> Element {
                                         performance_metrics.set(Some(PerformanceMetrics::new(max_iter)));
 
                                         if let Some(ref dataset) = *csv_dataset.read() {
-                                            // Special handling for Naive Bayes with new results display
-                                            if matches!(*selected_algorithm.read(), Algorithm::NaiveBayes) {
+                                            // Special handling for algorithms with new results display
+                                            let current_algo = *selected_algorithm.read();
+                                            if matches!(current_algo, Algorithm::NaiveBayes | Algorithm::DecisionTree) {
+                                                let algo_name = current_algo.name().to_string();
                                                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                                    run_naive_bayes(dataset, &algorithm_params.read())
+                                                    match current_algo {
+                                                        Algorithm::NaiveBayes => {
+                                                            run_naive_bayes(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::DecisionTree => {
+                                                            run_decision_tree(dataset, &algorithm_params.read())
+                                                        }
+                                                        _ => unreachable!(),
+                                                    }
                                                 }));
 
                                                 match result {
@@ -321,14 +331,17 @@ pub fn MLPlayground() -> Element {
                                                         result_message.set(String::new());
                                                     }
                                                     Ok(Err(e)) => {
-                                                        result_message.set(format!("❌ Naive Bayes failed: {}", e));
+                                                        result_message.set(format!("❌ {} failed: {}", algo_name, e));
                                                     }
                                                     Err(panic_info) => {
-                                                        web_sys::console::error_1(&"❌ WASM panic caught during Naive Bayes execution".into());
+                                                        web_sys::console::error_1(
+                                                            &format!("❌ WASM panic caught during {} execution", algo_name).into(),
+                                                        );
                                                         web_sys::console::error_1(&format!("{:?}", panic_info).into());
                                                         result_message.set(format!(
-                                                            "❌ Naive Bayes crashed unexpectedly.\n\n\
-                                                            Check browser console for details."
+                                                            "❌ {} crashed unexpectedly.\n\n\
+                                                            Check browser console for details.",
+                                                            algo_name
                                                         ));
                                                     }
                                                 }
@@ -926,7 +939,18 @@ fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset, params: &AlgorithmP
         Algorithm::KMeans => run_kmeans(dataset, params),
         Algorithm::PCA => run_pca(dataset, params),
         Algorithm::LogisticRegression => run_logistic_regression(dataset, params),
-        Algorithm::DecisionTree => run_decision_tree(dataset, params),
+        Algorithm::DecisionTree => {
+            // DecisionTree returns AlgorithmResults, convert to String for backward compatibility
+            match run_decision_tree(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nAccuracy: {:.1}%\nPredictions: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.accuracy.unwrap_or(0.0),
+                    results.predictions.len()
+                ),
+                Err(e) => format!("❌ Decision Tree failed: {}", e),
+            }
+        }
         Algorithm::NaiveBayes => {
             // NaiveBayes returns AlgorithmResults, convert to String for backward compatibility
             match run_naive_bayes(dataset, params) {
@@ -1081,7 +1105,10 @@ fn run_minmax_scaler(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
     }
 }
 
-fn run_decision_tree(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+fn run_decision_tree(
+    dataset: &CsvDataset,
+    params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
     let mut dt = DecisionTreeClassifier::new(
         SplitCriterion::Gini,
         Some(params.dt_max_depth),
@@ -1089,43 +1116,76 @@ fn run_decision_tree(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
         params.dt_min_samples_leaf,
     );
 
-    match dt.fit(&dataset.features, &dataset.targets) {
-        Ok(_) => match dt.predict(&dataset.features) {
-            Ok(predictions) => {
-                // Calculate accuracy
-                let correct = predictions
-                    .iter()
-                    .zip(dataset.targets.iter())
-                    .filter(|(&pred, &actual)| pred == actual as usize)
-                    .count();
-                let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+    dt.fit(&dataset.features, &dataset.targets)?;
+    let predictions = dt.predict(&dataset.features)?;
 
-                // Count classes
-                let mut classes = std::collections::HashSet::new();
-                for &target in &dataset.targets {
-                    classes.insert(target as usize);
-                }
+    // Calculate accuracy
+    let correct = predictions
+        .iter()
+        .zip(dataset.targets.iter())
+        .filter(|(&pred, &actual)| pred == actual as usize)
+        .count();
+    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
 
-                format!(
-                    "✅ Decision Tree completed!\n\n\
-                    📊 Accuracy: {:.1}%\n\
-                    🌳 Tree Depth: {}\n\
-                    📈 Predictions: {}\n\
-                    🎯 Classes: {}\n\
-                    🔧 Min Samples Split: {}\n\
-                    🍃 Min Samples Leaf: {}",
-                    accuracy,
-                    params.dt_max_depth,
-                    predictions.len(),
-                    classes.len(),
-                    params.dt_min_samples_split,
-                    params.dt_min_samples_leaf
-                )
-            }
-            Err(e) => format!("❌ Prediction failed: {}", e),
-        },
-        Err(e) => format!("❌ Decision Tree failed: {}", e),
+    // Count classes
+    let mut classes = std::collections::HashSet::new();
+    for &target in &dataset.targets {
+        classes.insert(target as usize);
     }
+    let n_classes = classes.len();
+
+    // Build confusion matrix
+    let class_labels: Vec<String> = (0..n_classes).map(|i| format!("Class {}", i)).collect();
+    let mut matrix = vec![vec![0; n_classes]; n_classes];
+
+    for (i, &pred) in predictions.iter().enumerate() {
+        let actual = dataset.targets[i] as usize;
+        if pred < n_classes && actual < n_classes {
+            matrix[actual][pred] += 1;
+        }
+    }
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Classes".to_string(), MetricValue::Integer(n_classes));
+    metrics.insert(
+        "Samples".to_string(),
+        MetricValue::Integer(predictions.len()),
+    );
+    metrics.insert(
+        "Tree Depth".to_string(),
+        MetricValue::Integer(params.dt_max_depth),
+    );
+    metrics.insert(
+        "Min Samples Split".to_string(),
+        MetricValue::Integer(params.dt_min_samples_split),
+    );
+    metrics.insert(
+        "Min Samples Leaf".to_string(),
+        MetricValue::Integer(params.dt_min_samples_leaf),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert(
+        "Algorithm".to_string(),
+        "Decision Tree Classifier (CART)".to_string(),
+    );
+    model_details.insert("Split Criterion".to_string(), "Gini Impurity".to_string());
+    model_details.insert("Max Depth".to_string(), params.dt_max_depth.to_string());
+
+    Ok(AlgorithmResults {
+        algorithm_name: "Decision Tree".to_string(),
+        accuracy: Some(accuracy),
+        predictions,
+        actual_values: Some(dataset.targets.clone()),
+        metrics,
+        visualizations: vec![Visualization::ConfusionMatrix {
+            matrix,
+            class_labels,
+        }],
+        model_details,
+    })
 }
 
 fn run_naive_bayes(
