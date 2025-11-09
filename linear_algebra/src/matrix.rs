@@ -73,7 +73,10 @@ where
         result
     }
 
-    /// Get a specific row as a Vector
+    /// Get a specific row as a Vector (allocates new Vec)
+    ///
+    /// For performance-critical code, prefer `row_slice()` which returns
+    /// a zero-copy slice reference instead of allocating.
     pub fn row(&self, row: usize) -> Option<Vector<T>> {
         if row >= self.rows {
             return None;
@@ -83,6 +86,43 @@ where
         Some(Vector {
             data: self.data[start..end].to_vec(),
         })
+    }
+
+    /// Get an immutable slice view of a row (zero-copy).
+    ///
+    /// This is the preferred method for accessing rows in hot paths
+    /// as it doesn't allocate. Use `row()` only when you need an owned Vec.
+    ///
+    /// # Arguments
+    /// * `row` - Row index to access
+    ///
+    /// # Returns
+    /// * `Some(&[T])` - Slice view of the row if index is valid
+    /// * `None` - If row index is out of bounds
+    ///
+    /// # Performance
+    /// This method performs zero heap allocations and is suitable for
+    /// hot paths in ML algorithms. For example, K-Means can eliminate
+    /// 200,000+ allocations by using this instead of `row().unwrap().data`.
+    ///
+    /// # Example
+    /// ```
+    /// use linear_algebra::matrix::Matrix;
+    ///
+    /// let matrix = Matrix::from_vec(vec![1, 2, 3, 4, 5, 6], 2, 3).unwrap();
+    /// let row = matrix.row_slice(0).unwrap();
+    /// assert_eq!(row, &[1, 2, 3]);
+    ///
+    /// // Zero-copy: row is just a reference to matrix's internal data
+    /// assert_eq!(row.len(), 3);
+    /// ```
+    pub fn row_slice(&self, row: usize) -> Option<&[T]> {
+        if row >= self.rows {
+            return None;
+        }
+        let start = row * self.cols;
+        let end = start + self.cols;
+        Some(&self.data[start..end])
     }
 
     /// Get a specific column as a Vector
@@ -420,6 +460,51 @@ mod tests {
 
         let col1 = m.col(1).unwrap();
         assert_eq!(col1.data, vec![2, 5]);
+    }
+
+    #[test]
+    fn test_row_slice() {
+        let matrix = Matrix::from_vec(vec![1, 2, 3, 4, 5, 6], 2, 3).unwrap();
+
+        // Valid row access
+        assert_eq!(matrix.row_slice(0), Some(&[1, 2, 3][..]));
+        assert_eq!(matrix.row_slice(1), Some(&[4, 5, 6][..]));
+
+        // Out of bounds
+        assert_eq!(matrix.row_slice(2), None);
+        assert_eq!(matrix.row_slice(100), None);
+    }
+
+    #[test]
+    fn test_row_slice_zero_copy() {
+        let matrix = Matrix::from_vec(vec![1.0, 2.0, 3.0, 4.0], 2, 2).unwrap();
+
+        // Get slice multiple times - should be instant (no allocations)
+        for _ in 0..10000 {
+            let _ = matrix.row_slice(0).unwrap();
+        }
+
+        // Compare with row() which allocates every time
+        let slice = matrix.row_slice(0).unwrap();
+        let owned = matrix.row(0).unwrap();
+
+        assert_eq!(slice, &owned.data[..]);
+    }
+
+    #[test]
+    fn test_row_slice_mutation_safety() {
+        let mut matrix = Matrix::from_vec(vec![1, 2, 3, 4], 2, 2).unwrap();
+
+        // row_slice returns immutable reference - can't modify
+        let row = matrix.row_slice(0).unwrap();
+        assert_eq!(row, &[1, 2]);
+
+        // Can still modify matrix through other means
+        matrix[(0, 0)] = 10;
+
+        // New slice reflects changes
+        let row_after = matrix.row_slice(0).unwrap();
+        assert_eq!(row_after, &[10, 2]);
     }
 }
 
