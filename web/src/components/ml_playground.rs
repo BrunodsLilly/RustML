@@ -36,6 +36,11 @@ pub fn MLPlayground() -> Element {
     let mut performance_metrics = use_signal(|| None::<PerformanceMetrics>);
     let mut show_performance = use_signal(|| false);
 
+    // State for train/test split
+    let mut train_split_pct = use_signal(|| 80); // Default 80% train, 20% test
+    let mut show_predictions = use_signal(|| false);
+    let mut predictions_data = use_signal(|| None::<PredictionsData>);
+
     rsx! {
         div { class: "ml-playground",
             header { class: "playground-header",
@@ -142,6 +147,57 @@ pub fn MLPlayground() -> Element {
                                     p { "Column Names: {dataset.feature_names.join(\", \")}" }
                                 }
                             }
+
+                            // Train/Test Split Configuration
+                            div { class: "train-test-split",
+                                h3 { "📊 Data Split" }
+                                p { class: "split-description",
+                                    "Split your data into training and testing sets for model evaluation"
+                                }
+
+                                div { class: "split-control",
+                                    label {
+                                        r#for: "train-split-slider",
+                                        "Training Data: {train_split_pct}%"
+                                    }
+                                    input {
+                                        r#type: "range",
+                                        id: "train-split-slider",
+                                        min: "50",
+                                        max: "90",
+                                        step: "5",
+                                        value: "{train_split_pct}",
+                                        oninput: move |evt| {
+                                            if let Ok(val) = evt.value().parse::<i32>() {
+                                                train_split_pct.set(val);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                div { class: "split-summary",
+                                    {
+                                        let train_pct = *train_split_pct.read();
+                                        let train_count = (dataset.num_samples * (train_pct as usize)) / 100;
+                                        let test_count = dataset.num_samples - train_count;
+                                        let test_pct = 100 - train_pct;
+                                        rsx! {
+                                            div { class: "split-info train-info",
+                                                span { class: "split-label", "Train:" }
+                                                span { class: "split-value",
+                                                    "{train_count} samples ({train_pct}%)"
+                                                }
+                                            }
+                                            div { class: "split-info test-info",
+                                                span { class: "split-label", "Test:" }
+                                                span { class: "split-value",
+                                                    "{test_count} samples ({test_pct}%)"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -230,7 +286,10 @@ pub fn MLPlayground() -> Element {
                                                     *selected_algorithm.read(),
                                                     dataset,
                                                     &algorithm_params.read(),
-                                                    &mut performance_metrics
+                                                    &mut performance_metrics,
+                                                    *train_split_pct.read() as usize,
+                                                    &mut predictions_data,
+                                                    &mut show_predictions
                                                 )
                                             }));
 
@@ -357,6 +416,13 @@ pub fn MLPlayground() -> Element {
                         }
                     }
 
+                    // Predictions Table (shown after supervised learning)
+                    if *show_predictions.read() {
+                        if let Some(ref pred_data) = *predictions_data.read() {
+                            PredictionsTable { predictions: pred_data.clone() }
+                        }
+                    }
+
                     if csv_dataset.read().is_some() && !*is_processing.read() && !*show_performance.read() {
                         AlgorithmExplanation { algorithm: *selected_algorithm.read() }
                     }
@@ -446,6 +512,24 @@ impl Default for AlgorithmParams {
             scaler_max: 1.0,
         }
     }
+}
+
+/// Predictions data for supervised learning
+#[derive(Debug, Clone, PartialEq)]
+struct PredictionsData {
+    // Train set results
+    train_actual: Vec<usize>,
+    train_predicted: Vec<usize>,
+    train_accuracy: f64,
+
+    // Test set results
+    test_actual: Vec<usize>,
+    test_predicted: Vec<usize>,
+    test_accuracy: f64,
+
+    // Overall metrics
+    num_classes: usize,
+    confusion_matrix: Vec<Vec<usize>>, // confusion_matrix[actual][predicted]
 }
 
 #[component]
@@ -567,12 +651,132 @@ fn AlgorithmExplanation(algorithm: Algorithm) -> Element {
     }
 }
 
+/// Predictions Table Component - displays train/test predictions with accuracy
+#[component]
+fn PredictionsTable(predictions: PredictionsData) -> Element {
+    rsx! {
+        div { class: "predictions-container",
+            h2 { "🎯 Predictions & Results" }
+
+            // Overall Summary Stats
+            div { class: "summary-stats",
+                h3 { "📊 Model Performance" }
+
+                div { class: "stats-grid",
+                    div { class: "stat-card train-stat",
+                        div { class: "stat-label", "Training Accuracy" }
+                        div { class: "stat-value", "{predictions.train_accuracy:.1}%" }
+                        div { class: "stat-detail", "{predictions.train_actual.len()} samples" }
+                    }
+
+                    div { class: "stat-card test-stat",
+                        div { class: "stat-label", "Test Accuracy" }
+                        div { class: "stat-value", "{predictions.test_accuracy:.1}%" }
+                        div { class: "stat-detail", "{predictions.test_actual.len()} samples" }
+                    }
+
+                    div { class: "stat-card classes-stat",
+                        div { class: "stat-label", "Classes" }
+                        div { class: "stat-value", "{predictions.num_classes}" }
+                        div { class: "stat-detail", "unique labels" }
+                    }
+                }
+            }
+
+            // Confusion Matrix
+            div { class: "confusion-matrix-section",
+                h3 { "🔢 Confusion Matrix (Test Set)" }
+                ConfusionMatrix { matrix: predictions.confusion_matrix.clone(), num_classes: predictions.num_classes }
+            }
+
+            // Test Predictions Table
+            div { class: "predictions-table-section",
+                h3 { "📋 Test Set Predictions (First 50)" }
+
+                table { class: "predictions-table",
+                    thead {
+                        tr {
+                            th { "Sample #" }
+                            th { "Actual" }
+                            th { "Predicted" }
+                            th { "Result" }
+                        }
+                    }
+                    tbody {
+                        for (i, (&actual, &predicted)) in predictions.test_actual.iter()
+                            .zip(predictions.test_predicted.iter())
+                            .enumerate()
+                            .take(50) {
+                            tr {
+                                class: if actual == predicted { "correct-prediction" } else { "incorrect-prediction" },
+                                td { "{i + 1}" }
+                                td { class: "actual-value", "{actual}" }
+                                td { class: "predicted-value", "{predicted}" }
+                                td {
+                                    if actual == predicted {
+                                        span { class: "result-icon correct", "✓" }
+                                    } else {
+                                        span { class: "result-icon incorrect", "✗" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if predictions.test_actual.len() > 50 {
+                    p { class: "table-note",
+                        "Showing first 50 of {predictions.test_actual.len()} test samples"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Confusion Matrix Component
+#[component]
+fn ConfusionMatrix(matrix: Vec<Vec<usize>>, num_classes: usize) -> Element {
+    rsx! {
+        table { class: "confusion-matrix",
+            thead {
+                tr {
+                    th { class: "matrix-corner", "" }
+                    th { colspan: "{num_classes}", class: "predicted-header", "Predicted Class" }
+                }
+                tr {
+                    th { "Actual" }
+                    for j in 0..num_classes {
+                        th { "Class {j}" }
+                    }
+                }
+            }
+            tbody {
+                for i in 0..num_classes {
+                    tr {
+                        th { "Class {i}" }
+                        for j in 0..num_classes {
+                            td {
+                                class: if i == j { "matrix-cell diagonal" } else { "matrix-cell off-diagonal" },
+                                "{matrix[i][j]}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Run algorithm with performance metrics tracking
 fn run_algorithm_with_metrics(
     algorithm: Algorithm,
     dataset: &CsvDataset,
     params: &AlgorithmParams,
     metrics: &mut Signal<Option<PerformanceMetrics>>,
+    train_split_pct: usize,
+    predictions_data: &mut Signal<Option<PredictionsData>>,
+    show_predictions: &mut Signal<bool>,
 ) -> String {
     let start_time = web_sys::window()
         .and_then(|w| w.performance())
@@ -581,9 +785,15 @@ fn run_algorithm_with_metrics(
 
     let result = match algorithm {
         Algorithm::KMeans => run_kmeans_with_metrics(dataset, params, metrics, start_time),
-        Algorithm::LogisticRegression => {
-            run_logistic_regression_with_metrics(dataset, params, metrics, start_time)
-        }
+        Algorithm::LogisticRegression => run_logistic_regression_with_metrics(
+            dataset,
+            params,
+            metrics,
+            start_time,
+            train_split_pct,
+            predictions_data,
+            show_predictions,
+        ),
         _ => run_algorithm(algorithm, dataset, params), // Fallback for algorithms without metrics
     };
 
@@ -818,19 +1028,60 @@ fn run_logistic_regression_with_metrics(
     params: &AlgorithmParams,
     metrics: &mut Signal<Option<PerformanceMetrics>>,
     start_time: f64,
+    train_split_pct: usize,
+    predictions_data: &mut Signal<Option<PredictionsData>>,
+    show_predictions: &mut Signal<bool>,
 ) -> String {
+    use linear_algebra::matrix::Matrix;
+
     let learning_rate = params.learning_rate;
     let max_iter = params.logreg_max_iter;
     let tolerance = params.logreg_tolerance;
-
-    let mut model = LogisticRegression::new(learning_rate, max_iter, tolerance);
 
     // Update metrics during training
     if let Some(ref mut perf) = *metrics.write() {
         perf.status = TrainingStatus::Running;
     }
 
-    match model.fit(&dataset.features, &dataset.targets) {
+    // Split data into train/test sets
+    let n_samples = dataset.num_samples;
+    let train_size = (n_samples * train_split_pct) / 100;
+
+    // Extract train set
+    let mut train_data: Vec<f64> = Vec::new();
+    let mut train_targets: Vec<f64> = Vec::new();
+    for i in 0..train_size {
+        for j in 0..dataset.features.cols {
+            train_data.push(*dataset.features.get(i, j).unwrap());
+        }
+        train_targets.push(dataset.targets[i]);
+    }
+
+    // Extract test set
+    let mut test_data: Vec<f64> = Vec::new();
+    let mut test_targets: Vec<f64> = Vec::new();
+    for i in train_size..n_samples {
+        for j in 0..dataset.features.cols {
+            test_data.push(*dataset.features.get(i, j).unwrap());
+        }
+        test_targets.push(dataset.targets[i]);
+    }
+
+    let train_matrix = match Matrix::from_vec(train_data, train_size, dataset.features.cols) {
+        Ok(m) => m,
+        Err(e) => return format!("❌ Failed to create train matrix: {}", e),
+    };
+
+    let test_matrix =
+        match Matrix::from_vec(test_data, n_samples - train_size, dataset.features.cols) {
+            Ok(m) => m,
+            Err(e) => return format!("❌ Failed to create test matrix: {}", e),
+        };
+
+    // Train model on training set
+    let mut model = LogisticRegression::new(learning_rate, max_iter, tolerance);
+
+    match model.fit(&train_matrix, &train_targets) {
         Ok(_) => {
             let elapsed = web_sys::window()
                 .and_then(|w| w.performance())
@@ -849,42 +1100,94 @@ fn run_logistic_regression_with_metrics(
                 };
             }
 
-            match model.predict(&dataset.features) {
-                Ok(predictions) => {
-                    let mut correct = 0;
-                    for (i, &pred) in predictions.iter().enumerate() {
-                        let pred_f64 = pred as f64;
-                        if (pred_f64 - dataset.targets[i]).abs() < 0.5 {
-                            correct += 1;
-                        }
-                    }
-                    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
-
-                    let mut classes: Vec<f64> = dataset.targets.clone();
-                    classes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                    classes.dedup();
-
-                    format!(
-                        "✅ Logistic Regression completed in {:.2}ms!\n\nAccuracy: {:.2}%\nClasses: {}\nSamples: {}",
-                        elapsed,
-                        accuracy,
-                        classes.len(),
-                        predictions.len()
-                    )
-                }
+            // Predict on train set
+            let train_predictions = match model.predict(&train_matrix) {
+                Ok(p) => p,
                 Err(e) => {
                     if let Some(ref mut perf) = *metrics.write() {
                         perf.status = TrainingStatus::Failed;
                     }
-                    format!("❌ Prediction failed: {}", e)
+                    return format!("❌ Train prediction failed: {}", e);
                 }
+            };
+
+            // Predict on test set
+            let test_predictions = match model.predict(&test_matrix) {
+                Ok(p) => p,
+                Err(e) => {
+                    if let Some(ref mut perf) = *metrics.write() {
+                        perf.status = TrainingStatus::Failed;
+                    }
+                    return format!("❌ Test prediction failed: {}", e);
+                }
+            };
+
+            // Calculate accuracies
+            let train_actual: Vec<usize> = train_targets.iter().map(|&x| x as usize).collect();
+            let test_actual: Vec<usize> = test_targets.iter().map(|&x| x as usize).collect();
+
+            let train_correct = train_predictions
+                .iter()
+                .zip(train_actual.iter())
+                .filter(|(&pred, &actual)| pred == actual)
+                .count();
+
+            let test_correct = test_predictions
+                .iter()
+                .zip(test_actual.iter())
+                .filter(|(&pred, &actual)| pred == actual)
+                .count();
+
+            let train_accuracy = (train_correct as f64 / train_predictions.len() as f64) * 100.0;
+            let test_accuracy = (test_correct as f64 / test_predictions.len() as f64) * 100.0;
+
+            // Get number of classes
+            let mut classes: Vec<usize> = train_actual.clone();
+            classes.extend(test_actual.clone());
+            classes.sort();
+            classes.dedup();
+            let num_classes = classes.len();
+
+            // Build confusion matrix (test set only)
+            let mut confusion_matrix = vec![vec![0; num_classes]; num_classes];
+            for (&actual, &pred) in test_actual.iter().zip(test_predictions.iter()) {
+                confusion_matrix[actual][pred] += 1;
             }
+
+            // Store predictions data
+            predictions_data.set(Some(PredictionsData {
+                train_actual,
+                train_predicted: train_predictions.clone(),
+                train_accuracy,
+                test_actual,
+                test_predicted: test_predictions.clone(),
+                test_accuracy,
+                num_classes,
+                confusion_matrix,
+            }));
+
+            // Show predictions table
+            show_predictions.set(true);
+
+            format!(
+                "✅ Logistic Regression completed in {:.2}ms!\n\n\
+                📊 Training Accuracy: {:.1}% ({} samples)\n\
+                🎯 Test Accuracy: {:.1}% ({} samples)\n\
+                📈 Classes: {}\n\n\
+                See detailed predictions and confusion matrix below!",
+                elapsed,
+                train_accuracy,
+                train_predictions.len(),
+                test_accuracy,
+                test_predictions.len(),
+                num_classes
+            )
         }
         Err(e) => {
             if let Some(ref mut perf) = *metrics.write() {
                 perf.status = TrainingStatus::Failed;
             }
-            format!("❌ Logistic Regression failed: {}", e)
+            format!("❌ Logistic Regression training failed: {}", e)
         }
     }
 }

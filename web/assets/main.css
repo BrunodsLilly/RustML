@@ -1623,8 +1623,289 @@ td {
 
 .dataset-info h3 {
     font-size: 1rem;
-    color: #666;
+}
+
+/* Train/Test Split Styles */
+.train-test-split {
+    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+    border: 2px solid #667eea40;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.train-test-split h3 {
+    font-size: 1rem;
+    color: #333;
     margin-bottom: 0.5rem;
+}
+
+.split-description {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 1rem;
+}
+
+.split-control {
+    margin-bottom: 1rem;
+}
+
+.split-control label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.split-control input[type="range"] {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(to right, #667eea, #764ba2);
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.split-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid #667eea;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.split-control input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid #667eea;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.split-summary {
+    display: flex;
+    gap: 1rem;
+}
+
+.split-info {
+    flex: 1;
+    padding: 0.75rem;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.train-info {
+    background: linear-gradient(135deg, #4CAF5015 0%, #45A04915 100%);
+    border-left: 4px solid #4CAF50;
+}
+
+.test-info {
+    background: linear-gradient(135deg, #FF980015 0%, #FF871515 100%);
+    border-left: 4px solid #FF9800;
+}
+
+.split-label {
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.split-value {
+    font-size: 0.95rem;
+    color: #555;
+}
+
+/* Predictions Table and Results Styles */
+.predictions-container {
+    margin-top: 2rem;
+    animation: fadeIn 0.5s;
+}
+
+.predictions-container h2 {
+    color: #333;
+    font-size: 1.8rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 3px solid #667eea;
+    padding-bottom: 0.5rem;
+}
+
+.predictions-container h3 {
+    color: #444;
+    font-size: 1.3rem;
+    margin: 1.5rem 0 1rem 0;
+}
+
+.summary-stats {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-left: 4px solid #667eea;
+}
+
+.stat-card.train-stat {
+    border-left-color: #4CAF50;
+}
+
+.stat-card.test-stat {
+    border-left-color: #FF9800;
+}
+
+.stat-card.classes-stat {
+    border-left-color: #2196F3;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 0.25rem;
+}
+
+.stat-detail {
+    font-size: 0.9rem;
+    color: #777;
+}
+
+.confusion-matrix-section {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.confusion-matrix {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 1rem;
+}
+
+.confusion-matrix th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.75rem;
+    font-weight: 600;
+    border: 1px solid #5a6ecc;
+}
+
+.confusion-matrix .matrix-corner {
+    background: #f5f5f5;
+    border: none;
+}
+
+.confusion-matrix .predicted-header {
+    font-size: 0.95rem;
+}
+
+.matrix-cell {
+    padding: 1rem;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border: 1px solid #ddd;
+}
+
+.matrix-cell.diagonal {
+    background: linear-gradient(135deg, #4CAF5020 0%, #45A04920 100%);
+    color: #2e7d32;
+}
+
+.matrix-cell.off-diagonal {
+    background: linear-gradient(135deg, #FF980020 0%, #FF871520 100%);
+    color: #e65100;
+}
+
+.predictions-table-section {
+    margin-top: 2rem;
+}
+
+.predictions-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.predictions-table thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.predictions-table th {
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    border: 1px solid #5a6ecc;
+}
+
+.predictions-table td {
+    padding: 0.75rem 1rem;
+    border: 1px solid #ddd;
+}
+
+.predictions-table tbody tr:hover {
+    background: #f5f5f5;
+    transition: background 0.2s;
+}
+
+.correct-prediction {
+    background: linear-gradient(90deg, #4CAF5010 0%, transparent 100%);
+}
+
+.incorrect-prediction {
+    background: linear-gradient(90deg, #f4433610 0%, transparent 100%);
+}
+
+.result-icon {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.result-icon.correct {
+    color: #4CAF50;
+}
+
+.result-icon.incorrect {
+    color: #f44336;
+}
+
+.table-note {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    color: #666;
+    font-style: italic;
 }
 
 .dataset-info p {
