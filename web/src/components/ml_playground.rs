@@ -192,13 +192,37 @@ pub fn MLPlayground() -> Element {
                                         performance_metrics.set(Some(PerformanceMetrics::new(max_iter)));
 
                                         if let Some(ref dataset) = *csv_dataset.read() {
-                                            let result = run_algorithm_with_metrics(
-                                                *selected_algorithm.read(),
-                                                dataset,
-                                                &algorithm_params.read(),
-                                                &mut performance_metrics
-                                            );
-                                            result_message.set(result);
+                                            // WASM panic boundary: catch crashes gracefully
+                                            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                                run_algorithm_with_metrics(
+                                                    *selected_algorithm.read(),
+                                                    dataset,
+                                                    &algorithm_params.read(),
+                                                    &mut performance_metrics
+                                                )
+                                            }));
+
+                                            match result {
+                                                Ok(msg) => result_message.set(msg),
+                                                Err(panic_info) => {
+                                                    // Log panic details for debugging
+                                                    web_sys::console::error_1(&"❌ WASM panic caught during algorithm execution".into());
+                                                    web_sys::console::error_1(&format!("{:?}", panic_info).into());
+
+                                                    result_message.set(format!(
+                                                        "❌ Algorithm crashed unexpectedly.\n\n\
+                                                        This can happen when:\n\
+                                                        • Dataset is too large (try <1000 rows)\n\
+                                                        • Features have invalid values (NaN, Infinity)\n\
+                                                        • Parameters are out of valid range\n\n\
+                                                        💡 Try:\n\
+                                                        • Reducing dataset size\n\
+                                                        • Checking for missing/invalid data\n\
+                                                        • Using different parameter values\n\n\
+                                                        Check browser console for technical details."
+                                                    ));
+                                                }
+                                            }
                                         }
 
                                         is_processing.set(false);
