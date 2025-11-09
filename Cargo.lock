@@ -5865,6 +5865,7 @@ dependencies = [
  "preprocessing",
  "supervised",
  "three-d",
+ "web-sys",
 ]
 
 [[package]]

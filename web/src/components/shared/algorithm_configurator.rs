@@ -349,7 +349,9 @@ pub struct AlgorithmConfiguratorProps {
 /// ```
 #[component]
 pub fn AlgorithmConfigurator(props: AlgorithmConfiguratorProps) -> Element {
-    let params = props.parameters.clone().unwrap_or_else(|| get_algorithm_parameters(props.algorithm));
+    let params = use_signal(|| {
+        props.parameters.clone().unwrap_or_else(|| get_algorithm_parameters(props.algorithm))
+    });
 
     rsx! {
         div { class: "algorithm-configurator",
@@ -368,30 +370,38 @@ pub fn AlgorithmConfigurator(props: AlgorithmConfiguratorProps) -> Element {
             }
 
             // Parameters section
-            if !params.is_empty() {
-                div { class: "parameters-section",
-                    h4 { "⚙️ Configuration" }
+            {
+                let params_vec = params.read().clone();
+                if !params_vec.is_empty() {
+                    rsx! {
+                        div { class: "parameters-section",
+                            h4 { "⚙️ Configuration" }
 
-                    for param in params.iter() {
-                        ParameterControl {
-                            parameter: param.clone(),
-                            on_change: {
-                                let params_clone = params.clone();
-                                let handler = props.on_parameters_change.clone();
-                                move |new_value| {
-                                    let mut updated_params = params_clone.clone();
-                                    if let Some(p) = updated_params.iter_mut().find(|p| p.name == param.name) {
-                                        p.current_value = new_value;
+                            for param in params_vec.iter() {
+                                ParameterControl {
+                                    parameter: param.clone(),
+                                    on_change: {
+                                        let params_clone = params_vec.clone();
+                                        let handler = props.on_parameters_change.clone();
+                                        let param_name = param.name.clone();
+                                        move |new_value| {
+                                            let mut updated_params = params_clone.clone();
+                                            if let Some(p) = updated_params.iter_mut().find(|p| p.name == param_name) {
+                                                p.current_value = new_value;
+                                            }
+                                            handler.call(updated_params);
+                                        }
                                     }
-                                    handler.call(updated_params);
                                 }
                             }
                         }
                     }
-                }
-            } else {
-                div { class: "no-parameters",
-                    "ℹ️ This algorithm has no configurable parameters"
+                } else {
+                    rsx! {
+                        div { class: "no-parameters",
+                            "ℹ️ This algorithm has no configurable parameters"
+                        }
+                    }
                 }
             }
 

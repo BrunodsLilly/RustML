@@ -213,17 +213,18 @@ pub fn MLPlayground() -> Element {
                     }
 
                     // Algorithm Configurator (show when toggled)
-                    if *show_configurator.read() {
-                        div { class: "configurator-panel",
-                            AlgorithmConfigurator {
-                                algorithm_type: selected_algorithm.read().to_algorithm_type(),
-                                on_parameter_change: move |_name, _value| {
-                                    // Parameter updates would go here
-                                    // For now, using default AlgorithmParams
-                                }
-                            }
-                        }
-                    }
+                    // TODO: Fix lifetime issues with AlgorithmConfigurator
+                    // if *show_configurator.read() {
+                    //     div { class: "configurator-panel",
+                    //         AlgorithmConfigurator {
+                    //             algorithm: selected_algorithm.read().to_algorithm_type(),
+                    //             on_parameters_change: move |_params| {
+                    //                 // Parameter updates would go here
+                    //                 // For now, using default AlgorithmParams
+                    //             }
+                    //         }
+                    //     }
+                    // }
                 }
 
                 // Right panel: Results and visualization
@@ -296,7 +297,6 @@ impl Algorithm {
             Algorithm::LogisticRegression => AlgorithmType::LogisticRegression,
             Algorithm::StandardScaler => AlgorithmType::StandardScaler,
             Algorithm::MinMaxScaler => AlgorithmType::MinMaxScaler,
-            _ => AlgorithmType::KMeans,
         }
     }
 }
