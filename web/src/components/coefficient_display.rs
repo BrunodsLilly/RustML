@@ -13,16 +13,9 @@ use dioxus::prelude::*;
 /// - `feature_names`: Names of features corresponding to weights
 /// - `bias`: Learned bias/intercept term
 #[component]
-pub fn CoefficientDisplay(
-    weights: Vec<f64>,
-    feature_names: Vec<String>,
-    bias: f64,
-) -> Element {
+pub fn CoefficientDisplay(weights: Vec<f64>, feature_names: Vec<String>, bias: f64) -> Element {
     // Find max absolute weight for highlighting
-    let max_abs_weight = weights
-        .iter()
-        .map(|w| w.abs())
-        .fold(0.0f64, f64::max);
+    let max_abs_weight = weights.iter().map(|w| w.abs()).fold(0.0f64, f64::max);
 
     // Generate model equation string
     let equation = build_equation(&weights, &feature_names, bias);

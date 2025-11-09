@@ -169,11 +169,7 @@ impl KMeans {
     }
 
     /// Update centroids to the mean of assigned points
-    fn update_centroids(
-        &self,
-        data: &Matrix<f64>,
-        labels: &[usize],
-    ) -> Vec<Vec<f64>> {
+    fn update_centroids(&self, data: &Matrix<f64>, labels: &[usize]) -> Vec<Vec<f64>> {
         let n_features = data.n_features();
         let mut new_centroids = vec![vec![0.0; n_features]; self.n_clusters];
         let mut counts = vec![0; self.n_clusters];
@@ -341,7 +337,9 @@ mod tests {
     #[test]
     fn test_kmeans_centroids() {
         let data = Matrix::from_vec(
-            vec![0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 10.0, 10.0, 10.0, 11.0, 11.0, 10.0],
+            vec![
+                0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 10.0, 10.0, 10.0, 11.0, 11.0, 10.0,
+            ],
             6,
             2,
         )
@@ -402,7 +400,8 @@ mod tests {
     #[test]
     fn test_kmeans_convergence() {
         // Data that should converge quickly
-        let data = Matrix::from_vec(vec![0.0, 0.0, 0.1, 0.1, 10.0, 10.0, 10.1, 10.1], 4, 2).unwrap();
+        let data =
+            Matrix::from_vec(vec![0.0, 0.0, 0.1, 0.1, 10.0, 10.0, 10.1, 10.1], 4, 2).unwrap();
 
         let mut kmeans = KMeans::new(2, 100, 1e-4, Some(42));
         kmeans.fit(&data).unwrap();

@@ -179,16 +179,20 @@ impl LogisticRegression {
         // Train one classifier per class (one-vs-rest)
         for &class_label in &classes {
             // Create binary labels (1 for current class, 0 for others)
-            let binary_y: Vec<f64> = y.iter().map(|&label| {
-                if (label as usize) == class_label { 1.0 } else { 0.0 }
-            }).collect();
+            let binary_y: Vec<f64> = y
+                .iter()
+                .map(|&label| {
+                    if (label as usize) == class_label {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                })
+                .collect();
 
             // Train binary classifier for this class
-            let mut temp_model = LogisticRegression::new(
-                self.learning_rate,
-                self.max_iterations,
-                self.tolerance,
-            );
+            let mut temp_model =
+                LogisticRegression::new(self.learning_rate, self.max_iterations, self.tolerance);
             temp_model.fit_binary(X, &binary_y)?;
 
             all_weights.push(temp_model.weights.unwrap()[0].clone());
@@ -349,14 +353,7 @@ mod tests {
     fn test_binary_classification() {
         // Linearly separable binary classification
         let X = Matrix::from_vec(
-            vec![
-                1.0, 2.0,
-                2.0, 3.0,
-                3.0, 4.0,
-                6.0, 7.0,
-                7.0, 8.0,
-                8.0, 9.0,
-            ],
+            vec![1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 6.0, 7.0, 7.0, 8.0, 8.0, 9.0],
             6,
             2,
         )
@@ -402,14 +399,7 @@ mod tests {
     fn test_multiclass_classification() {
         // Three-class problem
         let X = Matrix::from_vec(
-            vec![
-                1.0, 1.0,
-                2.0, 1.0,
-                5.0, 5.0,
-                6.0, 5.0,
-                9.0, 9.0,
-                10.0, 9.0,
-            ],
+            vec![1.0, 1.0, 2.0, 1.0, 5.0, 5.0, 6.0, 5.0, 9.0, 9.0, 10.0, 9.0],
             6,
             2,
         )

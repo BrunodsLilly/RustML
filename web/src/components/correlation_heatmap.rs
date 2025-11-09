@@ -14,10 +14,7 @@ use linear_algebra::matrix::Matrix;
 /// - `correlation_matrix`: Computed correlation matrix (N×N)
 /// - `feature_names`: Names of features (length N)
 #[component]
-pub fn CorrelationHeatmap(
-    correlation_matrix: Matrix<f64>,
-    feature_names: Vec<String>,
-) -> Element {
+pub fn CorrelationHeatmap(correlation_matrix: Matrix<f64>, feature_names: Vec<String>) -> Element {
     let n_features = feature_names.len();
 
     // Cell size for SVG (smaller for many features)
@@ -253,7 +250,8 @@ fn analyze_correlations(corr_matrix: &Matrix<f64>, feature_names: &[String]) -> 
 
     if high_corr_count > n / 2 {
         insights.push(
-            "⚠️ Multiple high correlations detected. Model may suffer from multicollinearity.".to_string()
+            "⚠️ Multiple high correlations detected. Model may suffer from multicollinearity."
+                .to_string(),
         );
     } else if high_corr_count == 0 {
         insights.push("✓ Features are relatively independent (good for regression).".to_string());
@@ -271,10 +269,7 @@ fn analyze_correlations(corr_matrix: &Matrix<f64>, feature_names: &[String]) -> 
 
     if count > 0 {
         let avg_abs_corr = sum_abs_corr / count as f64;
-        insights.push(format!(
-            "Average correlation strength: {:.3}",
-            avg_abs_corr
-        ));
+        insights.push(format!("Average correlation strength: {:.3}", avg_abs_corr));
     }
 
     if insights.is_empty() {
@@ -305,14 +300,7 @@ mod tests {
 
     #[test]
     fn test_analyze_correlations_perfect() {
-        let corr = Matrix::from_vec(
-            vec![
-                1.0, 1.0,
-                1.0, 1.0,
-            ],
-            2,
-            2,
-        ).unwrap();
+        let corr = Matrix::from_vec(vec![1.0, 1.0, 1.0, 1.0], 2, 2).unwrap();
 
         let names = vec!["A".to_string(), "B".to_string()];
         let insights = analyze_correlations(&corr, &names);
@@ -323,14 +311,7 @@ mod tests {
 
     #[test]
     fn test_analyze_correlations_independent() {
-        let corr = Matrix::from_vec(
-            vec![
-                1.0, 0.0,
-                0.0, 1.0,
-            ],
-            2,
-            2,
-        ).unwrap();
+        let corr = Matrix::from_vec(vec![1.0, 0.0, 0.0, 1.0], 2, 2).unwrap();
 
         let names = vec!["X".to_string(), "Y".to_string()];
         let insights = analyze_correlations(&corr, &names);
