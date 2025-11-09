@@ -370,10 +370,146 @@ fn VisualizationsTab(results: AlgorithmResults) -> Element {
 /// Confusion Matrix visualization component
 #[component]
 fn ConfusionMatrixViz(matrix: Vec<Vec<usize>>, class_labels: Vec<String>) -> Element {
+    let n_classes = matrix.len();
+    if n_classes == 0 {
+        return rsx! {
+            div { class: "confusion-matrix-empty",
+                p { "No confusion matrix data available" }
+            }
+        };
+    }
+
+    // Find max value for color scaling
+    let max_value = matrix
+        .iter()
+        .flat_map(|row| row.iter())
+        .max()
+        .copied()
+        .unwrap_or(1);
+
+    // Calculate cell size and dimensions
+    let cell_size = 80;
+    let label_width = 60;
+    let label_height = 40;
+    let margin = 20;
+    let width = n_classes * cell_size + label_width + margin * 2;
+    let height = n_classes * cell_size + label_height + margin * 2;
+
+    // Pre-compute all labels to avoid lifetime issues
+    let display_labels: Vec<String> = (0..n_classes)
+        .map(|i| {
+            class_labels
+                .get(i)
+                .map(|s| s.clone())
+                .unwrap_or_else(|| format!("C{}", i))
+        })
+        .collect();
+
     rsx! {
-        div { class: "confusion-matrix",
-            p { "Confusion matrix visualization coming soon..." }
-            // TODO: Implement SVG heatmap
+        div { class: "confusion-matrix-viz",
+            h4 { "Confusion Matrix" }
+            p { class: "viz-subtitle", "Actual vs. Predicted Class Distribution" }
+
+            svg {
+                width: "{width}",
+                height: "{height}",
+                view_box: "0 0 {width} {height}",
+
+                // Title annotations
+                text {
+                    x: "{label_width + n_classes * cell_size / 2}",
+                    y: "{margin - 5}",
+                    text_anchor: "middle",
+                    class: "confusion-matrix-title",
+                    "Predicted Class"
+                }
+
+                text {
+                    x: "{margin - 10}",
+                    y: "{label_height + n_classes * cell_size / 2}",
+                    text_anchor: "middle",
+                    class: "confusion-matrix-title",
+                    transform: "rotate(-90, {margin - 10}, {label_height + n_classes * cell_size / 2})",
+                    "Actual Class"
+                }
+
+                // Column labels (predicted)
+                for (j , label) in display_labels.iter().enumerate() {
+                    text {
+                        x: "{label_width + j * cell_size + cell_size / 2}",
+                        y: "{label_height - 10}",
+                        text_anchor: "middle",
+                        class: "confusion-matrix-label",
+                        "{label}"
+                    }
+                }
+
+                // Row labels (actual) and cells
+                for (i , row_label) in display_labels.iter().enumerate() {
+                    // Row label
+                    text {
+                        x: "{label_width - 10}",
+                        y: "{label_height + i * cell_size + cell_size / 2 + 5}",
+                        text_anchor: "end",
+                        class: "confusion-matrix-label",
+                        "{row_label}"
+                    }
+
+                    // Cells for this row
+                    for j in 0..n_classes {
+                        {
+                            let value = matrix[i][j];
+                            let intensity = if max_value > 0 {
+                                (value as f64 / max_value as f64 * 100.0).min(100.0)
+                            } else {
+                                0.0
+                            };
+
+                            // Diagonal cells (correct predictions) use green, off-diagonal use red
+                            let (base_color, text_color) = if i == j {
+                                ("34, 197, 94", if intensity > 50.0 { "#ffffff" } else { "#1f2937" })
+                            } else {
+                                ("239, 68, 68", if intensity > 50.0 { "#ffffff" } else { "#1f2937" })
+                            };
+
+                            rsx! {
+                                // Cell background
+                                rect {
+                                    x: "{label_width + j * cell_size}",
+                                    y: "{label_height + i * cell_size}",
+                                    width: "{cell_size}",
+                                    height: "{cell_size}",
+                                    fill: "rgba({base_color}, {intensity / 100.0})",
+                                    stroke: "#e5e7eb",
+                                    stroke_width: "1"
+                                }
+
+                                // Cell value
+                                text {
+                                    x: "{label_width + j * cell_size + cell_size / 2}",
+                                    y: "{label_height + i * cell_size + cell_size / 2 + 5}",
+                                    text_anchor: "middle",
+                                    fill: "{text_color}",
+                                    class: "confusion-matrix-value",
+                                    "{value}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Legend
+            div { class: "confusion-matrix-legend",
+                div { class: "legend-item",
+                    div { class: "legend-color correct" }
+                    span { "Correct Predictions (Diagonal)" }
+                }
+                div { class: "legend-item",
+                    div { class: "legend-color incorrect" }
+                    span { "Incorrect Predictions (Off-Diagonal)" }
+                }
+            }
         }
     }
 }
@@ -400,10 +536,227 @@ fn ClusterDistributionViz(cluster_sizes: Vec<usize>) -> Element {
 /// Variance explained chart for PCA
 #[component]
 fn VarianceChartViz(explained_variance: Vec<f64>, cumulative_variance: Vec<f64>) -> Element {
+    let n_components = explained_variance.len();
+    if n_components == 0 {
+        return rsx! {
+            div { class: "variance-chart-empty",
+                p { "No variance data available" }
+            }
+        };
+    }
+
+    // Chart dimensions
+    let width = 600;
+    let height = 400;
+    let padding_left = 60;
+    let padding_right = 40;
+    let padding_top = 40;
+    let padding_bottom = 60;
+    let chart_width = width - padding_left - padding_right;
+    let chart_height = height - padding_top - padding_bottom;
+
+    // Find max variance for scaling
+    let max_variance = explained_variance
+        .iter()
+        .copied()
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap_or(1.0);
+
+    // Bar width
+    let bar_width = if n_components > 0 {
+        (chart_width as f64 / n_components as f64 * 0.8)
+            .max(20.0)
+            .min(60.0)
+    } else {
+        40.0
+    };
+    let bar_spacing = chart_width as f64 / n_components as f64;
+
     rsx! {
-        div { class: "variance-chart",
-            p { "Variance chart visualization coming soon..." }
-            // TODO: Implement chart
+        div { class: "variance-chart-viz",
+            h4 { "Variance Explained by Components" }
+            p { class: "viz-subtitle", "Individual and Cumulative Variance" }
+
+            svg {
+                width: "{width}",
+                height: "{height}",
+                view_box: "0 0 {width} {height}",
+
+                // Chart background
+                rect {
+                    x: "{padding_left}",
+                    y: "{padding_top}",
+                    width: "{chart_width}",
+                    height: "{chart_height}",
+                    fill: "#f9fafb",
+                    stroke: "#e5e7eb"
+                }
+
+                // Y-axis labels and grid lines
+                for i in 0..=5 {
+                    {
+                        let value = max_variance * (i as f64 / 5.0);
+                        let y = padding_top + chart_height - (chart_height as f64 * (i as f64 / 5.0)) as usize;
+
+                        rsx! {
+                            // Grid line
+                            line {
+                                x1: "{padding_left}",
+                                y1: "{y}",
+                                x2: "{padding_left + chart_width}",
+                                y2: "{y}",
+                                stroke: "#e5e7eb",
+                                stroke_width: "1"
+                            }
+
+                            // Y-axis label
+                            text {
+                                x: "{padding_left - 10}",
+                                y: "{y + 5}",
+                                text_anchor: "end",
+                                class: "variance-chart-axis-label",
+                                "{value:.2}"
+                            }
+                        }
+                    }
+                }
+
+                // X-axis
+                line {
+                    x1: "{padding_left}",
+                    y1: "{padding_top + chart_height}",
+                    x2: "{padding_left + chart_width}",
+                    y2: "{padding_top + chart_height}",
+                    stroke: "#374151",
+                    stroke_width: "2"
+                }
+
+                // Y-axis
+                line {
+                    x1: "{padding_left}",
+                    y1: "{padding_top}",
+                    x2: "{padding_left}",
+                    y2: "{padding_top + chart_height}",
+                    stroke: "#374151",
+                    stroke_width: "2"
+                }
+
+                // Bars for individual variance
+                for (i, &variance) in explained_variance.iter().enumerate() {
+                    {
+                        let bar_height = if max_variance > 0.0 {
+                            (variance / max_variance * chart_height as f64) as usize
+                        } else {
+                            0
+                        };
+                        let x = padding_left + (i as f64 * bar_spacing + (bar_spacing - bar_width) / 2.0) as usize;
+                        let y = padding_top + chart_height - bar_height;
+
+                        rsx! {
+                            // Individual variance bar
+                            rect {
+                                x: "{x}",
+                                y: "{y}",
+                                width: "{bar_width as usize}",
+                                height: "{bar_height}",
+                                fill: "#8b5cf6",
+                                opacity: "0.8"
+                            }
+
+                            // Component label
+                            text {
+                                x: "{x + bar_width as usize / 2}",
+                                y: "{padding_top + chart_height + 20}",
+                                text_anchor: "middle",
+                                class: "variance-chart-x-label",
+                                "PC{i + 1}"
+                            }
+
+                            // Variance percentage
+                            text {
+                                x: "{x + bar_width as usize / 2}",
+                                y: "{y - 5}",
+                                text_anchor: "middle",
+                                class: "variance-chart-value",
+                                "{variance:.1}%"
+                            }
+                        }
+                    }
+                }
+
+                // Cumulative variance line
+                {
+                    let points: Vec<String> = cumulative_variance.iter().enumerate()
+                        .map(|(i, &cum_var)| {
+                            let x = padding_left + (i as f64 * bar_spacing + bar_spacing / 2.0) as usize;
+                            let y_ratio = if max_variance > 0.0 { cum_var / max_variance } else { 0.0 };
+                            let y = padding_top + chart_height - (y_ratio * chart_height as f64) as usize;
+                            format!("{},{}", x, y)
+                        })
+                        .collect();
+
+                    let polyline_points = points.join(" ");
+
+                    rsx! {
+                        polyline {
+                            points: "{polyline_points}",
+                            fill: "none",
+                            stroke: "#ef4444",
+                            stroke_width: "3",
+                            opacity: "0.9"
+                        }
+
+                        // Points on the line
+                        for (i, &cum_var) in cumulative_variance.iter().enumerate() {
+                            {
+                                let x = padding_left + (i as f64 * bar_spacing + bar_spacing / 2.0) as usize;
+                                let y_ratio = if max_variance > 0.0 { cum_var / max_variance } else { 0.0 };
+                                let y = padding_top + chart_height - (y_ratio * chart_height as f64) as usize;
+
+                                rsx! {
+                                    circle {
+                                        cx: "{x}",
+                                        cy: "{y}",
+                                        r: "4",
+                                        fill: "#ef4444"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Y-axis title
+                text {
+                    x: "{padding_left - 45}",
+                    y: "{padding_top + chart_height / 2}",
+                    text_anchor: "middle",
+                    class: "variance-chart-title",
+                    transform: "rotate(-90, {padding_left - 45}, {padding_top + chart_height / 2})",
+                    "Variance (%)"
+                }
+
+                // X-axis title
+                text {
+                    x: "{padding_left + chart_width / 2}",
+                    y: "{padding_top + chart_height + 50}",
+                    text_anchor: "middle",
+                    class: "variance-chart-title",
+                    "Principal Component"
+                }
+            }
+
+            // Legend
+            div { class: "variance-chart-legend",
+                div { class: "legend-item",
+                    div { class: "legend-color variance-individual" }
+                    span { "Individual Variance" }
+                }
+                div { class: "legend-item",
+                    div { class: "legend-color variance-cumulative" }
+                    span { "Cumulative Variance" }
+                }
+            }
         }
     }
 }
