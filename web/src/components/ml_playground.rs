@@ -60,7 +60,33 @@ pub fn MLPlayground() -> Element {
                                         let files = file_engine.files();
                                         if let Some(file_name) = files.first() {
                                             if let Some(file_contents) = file_engine.read_file(file_name).await {
+                                                // Input validation: file size limit (5MB max)
+                                                const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
+                                                if file_contents.len() > MAX_FILE_SIZE {
+                                                    result_message.set(format!(
+                                                        "❌ File too large: {:.2} MB (max 5MB)\n\n\
+                                                        Large datasets can crash the browser.\n\
+                                                        Try filtering your data or using a smaller sample.",
+                                                        file_contents.len() as f64 / (1024.0 * 1024.0)
+                                                    ));
+                                                    return;
+                                                }
+
                                                 if let Ok(content_str) = String::from_utf8(file_contents) {
+                                                    // Input validation: row and column limits
+                                                    const MAX_ROWS: usize = 10000;
+                                                    const MAX_COLS: usize = 100;
+
+                                                    let line_count = content_str.lines().count();
+                                                    if line_count > MAX_ROWS + 1 { // +1 for header
+                                                        result_message.set(format!(
+                                                            "❌ Too many rows: {} (max {})\n\n\
+                                                            Try sampling your dataset first.",
+                                                            line_count - 1, MAX_ROWS
+                                                        ));
+                                                        return;
+                                                    }
+
                                                     // For unsupervised learning, use first column as dummy target
                                                     // We'll only use the features anyway
                                                     let headers: Vec<&str> = content_str.lines().next()
@@ -70,6 +96,12 @@ pub fn MLPlayground() -> Element {
 
                                                     if headers.is_empty() {
                                                         result_message.set("❌ CSV has no headers".to_string());
+                                                    } else if headers.len() > MAX_COLS {
+                                                        result_message.set(format!(
+                                                            "❌ Too many columns: {} (max {})\n\n\
+                                                            Consider reducing feature count with PCA first.",
+                                                            headers.len(), MAX_COLS
+                                                        ));
                                                     } else {
                                                         let target_col = headers[0];
                                                         match CsvDataset::from_csv(&content_str, target_col) {
