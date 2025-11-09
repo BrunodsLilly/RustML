@@ -4,6 +4,7 @@
 //! with user-uploaded CSV data.
 
 use clustering::kmeans::KMeans;
+use decision_tree::{DecisionTreeClassifier, SplitCriterion};
 use dimensionality_reduction::pca::PCA;
 use dioxus::prelude::*;
 use loader::csv_loader::CsvDataset;
@@ -13,6 +14,7 @@ use ml_traits::supervised::SupervisedModel;
 use ml_traits::unsupervised::UnsupervisedModel;
 use preprocessing::scalers::{MinMaxScaler, StandardScaler};
 use supervised::logistic_regression::LogisticRegression;
+use supervised::naive_bayes::GaussianNB;
 
 use crate::components::shared::{
     AlgorithmCategory, AlgorithmConfigurator, AlgorithmParameter, AlgorithmType,
@@ -232,6 +234,24 @@ pub fn MLPlayground() -> Element {
                         }
 
                         AlgorithmButton {
+                            algorithm: Algorithm::DecisionTree,
+                            selected: *selected_algorithm.read() == Algorithm::DecisionTree,
+                            onclick: move |_| selected_algorithm.set(Algorithm::DecisionTree),
+                            icon: "🌳",
+                            name: "Decision Tree",
+                            description: "Tree-based classifier"
+                        }
+
+                        AlgorithmButton {
+                            algorithm: Algorithm::NaiveBayes,
+                            selected: *selected_algorithm.read() == Algorithm::NaiveBayes,
+                            onclick: move |_| selected_algorithm.set(Algorithm::NaiveBayes),
+                            icon: "🎯",
+                            name: "Naive Bayes",
+                            description: "Probabilistic classifier"
+                        }
+
+                        AlgorithmButton {
                             algorithm: Algorithm::StandardScaler,
                             selected: *selected_algorithm.read() == Algorithm::StandardScaler,
                             onclick: move |_| selected_algorithm.set(Algorithm::StandardScaler),
@@ -367,6 +387,15 @@ pub fn MLPlayground() -> Element {
                                                     "learning_rate" => if let Some(val) = param.current_value.as_f64() {
                                                         current_params.learning_rate = val;
                                                     },
+                                                    "max_depth" => if let Some(val) = param.current_value.as_i64() {
+                                                        current_params.dt_max_depth = val as usize;
+                                                    },
+                                                    "min_samples_split" => if let Some(val) = param.current_value.as_i64() {
+                                                        current_params.dt_min_samples_split = val as usize;
+                                                    },
+                                                    "min_samples_leaf" => if let Some(val) = param.current_value.as_i64() {
+                                                        current_params.dt_min_samples_leaf = val as usize;
+                                                    },
                                                     "min_value" => if let Some(val) = param.current_value.as_f64() {
                                                         current_params.scaler_min = val;
                                                     },
@@ -451,6 +480,8 @@ enum Algorithm {
     KMeans,
     PCA,
     LogisticRegression,
+    DecisionTree,
+    NaiveBayes,
     StandardScaler,
     MinMaxScaler,
 }
@@ -461,6 +492,8 @@ impl Algorithm {
             Algorithm::KMeans => "K-Means Clustering",
             Algorithm::PCA => "PCA",
             Algorithm::LogisticRegression => "Logistic Regression",
+            Algorithm::DecisionTree => "Decision Tree",
+            Algorithm::NaiveBayes => "Naive Bayes",
             Algorithm::StandardScaler => "Standard Scaler",
             Algorithm::MinMaxScaler => "MinMax Scaler",
         }
@@ -471,6 +504,8 @@ impl Algorithm {
             Algorithm::KMeans => AlgorithmType::KMeans,
             Algorithm::PCA => AlgorithmType::PCA,
             Algorithm::LogisticRegression => AlgorithmType::LogisticRegression,
+            Algorithm::DecisionTree => AlgorithmType::DecisionTree,
+            Algorithm::NaiveBayes => AlgorithmType::NaiveBayes,
             Algorithm::StandardScaler => AlgorithmType::StandardScaler,
             Algorithm::MinMaxScaler => AlgorithmType::MinMaxScaler,
         }
@@ -493,6 +528,11 @@ struct AlgorithmParams {
     logreg_max_iter: usize,
     logreg_tolerance: f64,
 
+    // Decision Tree
+    dt_max_depth: usize,
+    dt_min_samples_split: usize,
+    dt_min_samples_leaf: usize,
+
     // Scalers
     scaler_min: f64,
     scaler_max: f64,
@@ -508,6 +548,9 @@ impl Default for AlgorithmParams {
             learning_rate: 0.01,
             logreg_max_iter: 1000,
             logreg_tolerance: 1e-4,
+            dt_max_depth: 10,
+            dt_min_samples_split: 2,
+            dt_min_samples_leaf: 1,
             scaler_min: 0.0,
             scaler_max: 1.0,
         }
@@ -607,6 +650,40 @@ fn AlgorithmExplanation(algorithm: Algorithm) -> Element {
                         div { class: "tech-note",
                             strong { "Implementation: " }
                             "One-vs-rest for multi-class"
+                        }
+                    }
+                },
+                Algorithm::DecisionTree => rsx! {
+                    div {
+                        h2 { "🌳 Decision Tree" }
+                        p { "Creates a tree of decisions to classify data." }
+                        h3 { "How it works:" }
+                        ol {
+                            li { "Recursively splits data based on features" }
+                            li { "Chooses splits that maximize information gain" }
+                            li { "Creates tree structure with decision rules" }
+                            li { "Makes predictions by traversing the tree" }
+                        }
+                        div { class: "tech-note",
+                            strong { "Implementation: " }
+                            "CART algorithm with Gini impurity"
+                        }
+                    }
+                },
+                Algorithm::NaiveBayes => rsx! {
+                    div {
+                        h2 { "🎯 Naive Bayes" }
+                        p { "Probabilistic classifier using Bayes' theorem." }
+                        h3 { "How it works:" }
+                        ol {
+                            li { "Assumes features are independent (naive assumption)" }
+                            li { "Calculates class probabilities using Bayes' theorem" }
+                            li { "Models feature distributions as Gaussians" }
+                            li { "Predicts class with highest probability" }
+                        }
+                        div { class: "tech-note",
+                            strong { "Implementation: " }
+                            "Gaussian Naive Bayes with numerical stability"
                         }
                     }
                 },
@@ -806,6 +883,8 @@ fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset, params: &AlgorithmP
         Algorithm::KMeans => run_kmeans(dataset, params),
         Algorithm::PCA => run_pca(dataset, params),
         Algorithm::LogisticRegression => run_logistic_regression(dataset, params),
+        Algorithm::DecisionTree => run_decision_tree(dataset, params),
+        Algorithm::NaiveBayes => run_naive_bayes(dataset, params),
         Algorithm::StandardScaler => run_standard_scaler(dataset, params),
         Algorithm::MinMaxScaler => run_minmax_scaler(dataset, params),
     }
@@ -945,6 +1024,92 @@ fn run_minmax_scaler(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
             Err(e) => format!("❌ Transform failed: {}", e),
         },
         Err(e) => format!("❌ MinMaxScaler failed: {}", e),
+    }
+}
+
+fn run_decision_tree(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+    let mut dt = DecisionTreeClassifier::new(
+        SplitCriterion::Gini,
+        Some(params.dt_max_depth),
+        params.dt_min_samples_split,
+        params.dt_min_samples_leaf,
+    );
+
+    match dt.fit(&dataset.features, &dataset.targets) {
+        Ok(_) => match dt.predict(&dataset.features) {
+            Ok(predictions) => {
+                // Calculate accuracy
+                let correct = predictions
+                    .iter()
+                    .zip(dataset.targets.iter())
+                    .filter(|(&pred, &actual)| pred == actual as usize)
+                    .count();
+                let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+
+                // Count classes
+                let mut classes = std::collections::HashSet::new();
+                for &target in &dataset.targets {
+                    classes.insert(target as usize);
+                }
+
+                format!(
+                    "✅ Decision Tree completed!\n\n\
+                    📊 Accuracy: {:.1}%\n\
+                    🌳 Tree Depth: {}\n\
+                    📈 Predictions: {}\n\
+                    🎯 Classes: {}\n\
+                    🔧 Min Samples Split: {}\n\
+                    🍃 Min Samples Leaf: {}",
+                    accuracy,
+                    params.dt_max_depth,
+                    predictions.len(),
+                    classes.len(),
+                    params.dt_min_samples_split,
+                    params.dt_min_samples_leaf
+                )
+            }
+            Err(e) => format!("❌ Prediction failed: {}", e),
+        },
+        Err(e) => format!("❌ Decision Tree failed: {}", e),
+    }
+}
+
+fn run_naive_bayes(dataset: &CsvDataset, _params: &AlgorithmParams) -> String {
+    let mut nb = GaussianNB::new();
+
+    match nb.fit(&dataset.features, &dataset.targets) {
+        Ok(_) => match nb.predict(&dataset.features) {
+            Ok(predictions) => {
+                // Calculate accuracy
+                let correct = predictions
+                    .iter()
+                    .zip(dataset.targets.iter())
+                    .filter(|(&pred, &actual)| pred == actual as usize)
+                    .count();
+                let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+
+                // Count classes
+                let mut classes = std::collections::HashSet::new();
+                for &target in &dataset.targets {
+                    classes.insert(target as usize);
+                }
+
+                format!(
+                    "✅ Naive Bayes completed!\n\n\
+                    📊 Accuracy: {:.1}%\n\
+                    🎲 Model: Gaussian Naive Bayes\n\
+                    📈 Predictions: {}\n\
+                    🎯 Classes: {}\n\
+                    📐 Assumption: Features are independent\n\
+                    📊 Distribution: Gaussian (Normal)",
+                    accuracy,
+                    predictions.len(),
+                    classes.len()
+                )
+            }
+            Err(e) => format!("❌ Prediction failed: {}", e),
+        },
+        Err(e) => format!("❌ Naive Bayes failed: {}", e),
     }
 }
 

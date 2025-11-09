@@ -5863,6 +5863,7 @@ dependencies = [
  "async-std",
  "clustering",
  "csv",
+ "decision_tree",
  "dimensionality_reduction",
  "dioxus",
  "getrandom 0.2.16",
