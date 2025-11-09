@@ -280,8 +280,8 @@ pub mod classification {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use regression::*;
     use classification::*;
+    use regression::*;
 
     #[test]
     fn test_mse() {

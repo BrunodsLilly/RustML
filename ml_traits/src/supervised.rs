@@ -53,7 +53,9 @@ pub trait Regressor<T: Numeric, D: Data<T>>: SupervisedModel<T, D, Prediction = 
 /// Trait for classification models
 ///
 /// Classification models predict discrete classes.
-pub trait Classifier<T: Numeric, D: Data<T>>: SupervisedModel<T, D, Prediction = Vec<usize>> {
+pub trait Classifier<T: Numeric, D: Data<T>>:
+    SupervisedModel<T, D, Prediction = Vec<usize>>
+{
     /// Get the number of classes
     fn n_classes(&self) -> usize;
 

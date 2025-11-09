@@ -3,16 +3,16 @@
 //! This component provides a comprehensive interface for testing all ML algorithms
 //! with user-uploaded CSV data.
 
-use dioxus::prelude::*;
-use loader::csv_loader::CsvDataset;
 use clustering::kmeans::KMeans;
 use dimensionality_reduction::pca::PCA;
-use preprocessing::scalers::{StandardScaler, MinMaxScaler};
-use supervised::logistic_regression::LogisticRegression;
+use dioxus::prelude::*;
+use loader::csv_loader::CsvDataset;
 use ml_traits::clustering::Clusterer;
-use ml_traits::unsupervised::UnsupervisedModel;
 use ml_traits::preprocessing::Transformer;
 use ml_traits::supervised::SupervisedModel;
+use ml_traits::unsupervised::UnsupervisedModel;
+use preprocessing::scalers::{MinMaxScaler, StandardScaler};
+use supervised::logistic_regression::LogisticRegression;
 
 /// ML Playground component
 #[component]
@@ -401,14 +401,12 @@ fn run_pca(dataset: &CsvDataset) -> String {
             match pca.transform(&dataset.features) {
                 Ok(_transformed) => {
                     // Get explained variance if available
-                    let explained_text = format!("Reduced from {} to {} dimensions",
-                        dataset.features.cols,
-                        n_components);
+                    let explained_text = format!(
+                        "Reduced from {} to {} dimensions",
+                        dataset.features.cols, n_components
+                    );
 
-                    format!(
-                        "✅ PCA completed!\n\n{}",
-                        explained_text
-                    )
+                    format!("✅ PCA completed!\n\n{}", explained_text)
                 }
                 Err(e) => format!("❌ Transform failed: {}", e),
             }
@@ -437,9 +435,7 @@ fn run_logistic_regression(dataset: &CsvDataset) -> String {
 
                     // Get unique classes
                     let mut classes: Vec<f64> = dataset.targets.clone();
-                    classes.sort_by(|a, b| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    });
+                    classes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                     classes.dedup();
 
                     format!(
@@ -460,18 +456,16 @@ fn run_standard_scaler(dataset: &CsvDataset) -> String {
     let mut scaler = StandardScaler::new();
 
     match scaler.fit(&dataset.features) {
-        Ok(_) => {
-            match scaler.transform(&dataset.features) {
-                Ok(scaled) => {
-                    format!(
+        Ok(_) => match scaler.transform(&dataset.features) {
+            Ok(scaled) => {
+                format!(
                         "✅ StandardScaler completed!\n\nScaled {} features to μ=0, σ=1\nTransformed {} samples",
                         dataset.features.cols,
                         scaled.len()
                     )
-                }
-                Err(e) => format!("❌ Transform failed: {}", e),
             }
-        }
+            Err(e) => format!("❌ Transform failed: {}", e),
+        },
         Err(e) => format!("❌ StandardScaler failed: {}", e),
     }
 }
@@ -480,18 +474,16 @@ fn run_minmax_scaler(dataset: &CsvDataset) -> String {
     let mut scaler = MinMaxScaler::new(0.0, 1.0);
 
     match scaler.fit(&dataset.features) {
-        Ok(_) => {
-            match scaler.transform(&dataset.features) {
-                Ok(scaled) => {
-                    format!(
+        Ok(_) => match scaler.transform(&dataset.features) {
+            Ok(scaled) => {
+                format!(
                         "✅ MinMaxScaler completed!\n\nScaled {} features to [0, 1]\nTransformed {} samples",
                         dataset.features.cols,
                         scaled.len()
                     )
-                }
-                Err(e) => format!("❌ Transform failed: {}", e),
             }
-        }
+            Err(e) => format!("❌ Transform failed: {}", e),
+        },
         Err(e) => format!("❌ MinMaxScaler failed: {}", e),
     }
 }

@@ -2,7 +2,6 @@
 ///
 /// This module provides comprehensive error handling for machine learning operations.
 /// All ML algorithms should use these error types instead of String-based errors.
-
 use std::fmt;
 
 /// Common error types for ML algorithms
@@ -15,9 +14,7 @@ pub enum MLError {
     },
 
     /// Model has not been fitted before prediction
-    NotFitted {
-        model_type: &'static str,
-    },
+    NotFitted { model_type: &'static str },
 
     /// Dimension mismatch between expected and provided data
     DimensionMismatch {
@@ -41,10 +38,7 @@ pub enum MLError {
     },
 
     /// Numerical instability detected
-    NumericalInstability {
-        context: String,
-        value: f64,
-    },
+    NumericalInstability { context: String, value: f64 },
 
     /// Matrix operation error
     MatrixError {
@@ -53,10 +47,7 @@ pub enum MLError {
     },
 
     /// CSV/Data loading error
-    DataLoadError {
-        source: String,
-        details: String,
-    },
+    DataLoadError { source: String, details: String },
 
     /// Invalid hyperparameter value
     InvalidHyperparameter {
@@ -76,7 +67,11 @@ impl fmt::Display for MLError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             MLError::InvalidInput { message, parameter } => {
-                write!(f, "Invalid input for parameter '{}': {}", parameter, message)
+                write!(
+                    f,
+                    "Invalid input for parameter '{}': {}",
+                    parameter, message
+                )
             }
             MLError::NotFitted { model_type } => {
                 write!(
@@ -85,21 +80,33 @@ impl fmt::Display for MLError {
                     model_type
                 )
             }
-            MLError::DimensionMismatch { expected, got, context } => {
+            MLError::DimensionMismatch {
+                expected,
+                got,
+                context,
+            } => {
                 write!(
                     f,
                     "Dimension mismatch in {}: expected {}x{}, got {}x{}",
                     context, expected.0, expected.1, got.0, got.1
                 )
             }
-            MLError::ConvergenceFailure { iterations, final_cost, threshold } => {
+            MLError::ConvergenceFailure {
+                iterations,
+                final_cost,
+                threshold,
+            } => {
                 write!(
                     f,
                     "Failed to converge after {} iterations (final cost: {:.6}, threshold: {:.6})",
                     iterations, final_cost, threshold
                 )
             }
-            MLError::InsufficientData { required, provided, operation } => {
+            MLError::InsufficientData {
+                required,
+                provided,
+                operation,
+            } => {
                 write!(
                     f,
                     "Insufficient data for {}: requires {} samples, got {}",
@@ -119,7 +126,11 @@ impl fmt::Display for MLError {
             MLError::DataLoadError { source, details } => {
                 write!(f, "Failed to load data from '{}': {}", source, details)
             }
-            MLError::InvalidHyperparameter { name, value, constraint } => {
+            MLError::InvalidHyperparameter {
+                name,
+                value,
+                constraint,
+            } => {
                 write!(
                     f,
                     "Invalid hyperparameter '{}' = '{}': must satisfy {}",
@@ -277,7 +288,9 @@ mod tests {
     #[test]
     fn test_convergence_failure_error() {
         let err = MLError::convergence_failure(100, 0.5, 1e-4);
-        assert!(err.to_string().contains("Failed to converge after 100 iterations"));
+        assert!(err
+            .to_string()
+            .contains("Failed to converge after 100 iterations"));
     }
 
     #[test]
@@ -306,8 +319,20 @@ mod tests {
     fn test_helper_methods() {
         let err = MLError::invalid_hyperparameter("k", "0", "k > 0");
         let err_string = err.to_string();
-        assert!(err_string.contains("'k'"), "Expected to find 'k' in: {}", err_string);
-        assert!(err_string.contains("'0'"), "Expected to find '0' in: {}", err_string);
-        assert!(err_string.contains("must satisfy k > 0"), "Expected to find 'must satisfy k > 0' in: {}", err_string);
+        assert!(
+            err_string.contains("'k'"),
+            "Expected to find 'k' in: {}",
+            err_string
+        );
+        assert!(
+            err_string.contains("'0'"),
+            "Expected to find '0' in: {}",
+            err_string
+        );
+        assert!(
+            err_string.contains("must satisfy k > 0"),
+            "Expected to find 'must satisfy k > 0' in: {}",
+            err_string
+        );
     }
 }

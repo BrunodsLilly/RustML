@@ -16,7 +16,10 @@ pub enum ValidationState {
 impl ValidationState {
     /// Check if the state is valid (either Valid or Warning)
     pub fn is_valid(&self) -> bool {
-        matches!(self, ValidationState::Valid | ValidationState::Warning { .. })
+        matches!(
+            self,
+            ValidationState::Valid | ValidationState::Warning { .. }
+        )
     }
 
     /// Get error message if invalid
@@ -124,7 +127,10 @@ pub fn ValidatedInput(props: ValidatedInputProps) -> Element {
     };
 
     // Use external validation state if provided, otherwise default to NotValidated
-    let current_state = props.validation_state.as_ref().unwrap_or(&ValidationState::NotValidated);
+    let current_state = props
+        .validation_state
+        .as_ref()
+        .unwrap_or(&ValidationState::NotValidated);
 
     rsx! {
         div { class: "input-group validated",
@@ -292,11 +298,17 @@ pub mod validators {
 
         if size > MAX_SIZE {
             ValidationState::Invalid {
-                message: format!("File too large (max 5MB, got {:.1}MB)", size as f64 / 1024.0 / 1024.0),
+                message: format!(
+                    "File too large (max 5MB, got {:.1}MB)",
+                    size as f64 / 1024.0 / 1024.0
+                ),
             }
         } else if size > WARN_SIZE {
             ValidationState::Warning {
-                message: format!("Large file ({:.1}MB) may be slow to process", size as f64 / 1024.0 / 1024.0),
+                message: format!(
+                    "Large file ({:.1}MB) may be slow to process",
+                    size as f64 / 1024.0 / 1024.0
+                ),
             }
         } else {
             ValidationState::Valid
@@ -345,9 +357,18 @@ mod tests {
 
     #[test]
     fn test_positive_number_invalid() {
-        assert!(matches!(positive_number("-1.0"), ValidationState::Invalid { .. }));
-        assert!(matches!(positive_number("0"), ValidationState::Invalid { .. }));
-        assert!(matches!(positive_number("abc"), ValidationState::Invalid { .. }));
+        assert!(matches!(
+            positive_number("-1.0"),
+            ValidationState::Invalid { .. }
+        ));
+        assert!(matches!(
+            positive_number("0"),
+            ValidationState::Invalid { .. }
+        ));
+        assert!(matches!(
+            positive_number("abc"),
+            ValidationState::Invalid { .. }
+        ));
     }
 
     #[test]
@@ -358,8 +379,14 @@ mod tests {
 
     #[test]
     fn test_learning_rate_warning() {
-        assert!(matches!(learning_rate("15.0"), ValidationState::Warning { .. }));
-        assert!(matches!(learning_rate("0.00001"), ValidationState::Warning { .. }));
+        assert!(matches!(
+            learning_rate("15.0"),
+            ValidationState::Warning { .. }
+        ));
+        assert!(matches!(
+            learning_rate("0.00001"),
+            ValidationState::Warning { .. }
+        ));
     }
 
     #[test]
@@ -378,29 +405,59 @@ mod tests {
 
     #[test]
     fn test_k_clusters_invalid() {
-        assert!(matches!(k_clusters("0", 100), ValidationState::Invalid { .. }));
-        assert!(matches!(k_clusters("101", 100), ValidationState::Invalid { .. }));
+        assert!(matches!(
+            k_clusters("0", 100),
+            ValidationState::Invalid { .. }
+        ));
+        assert!(matches!(
+            k_clusters("101", 100),
+            ValidationState::Invalid { .. }
+        ));
     }
 
     #[test]
     fn test_k_clusters_warning() {
-        assert!(matches!(k_clusters("1", 100), ValidationState::Warning { .. }));
-        assert!(matches!(k_clusters("60", 100), ValidationState::Warning { .. }));
+        assert!(matches!(
+            k_clusters("1", 100),
+            ValidationState::Warning { .. }
+        ));
+        assert!(matches!(
+            k_clusters("60", 100),
+            ValidationState::Warning { .. }
+        ));
     }
 
     #[test]
     fn test_csv_file_size() {
         assert!(matches!(csv_file_size(1024), ValidationState::Valid));
-        assert!(matches!(csv_file_size(3 * 1024 * 1024), ValidationState::Warning { .. }));
-        assert!(matches!(csv_file_size(6 * 1024 * 1024), ValidationState::Invalid { .. }));
+        assert!(matches!(
+            csv_file_size(3 * 1024 * 1024),
+            ValidationState::Warning { .. }
+        ));
+        assert!(matches!(
+            csv_file_size(6 * 1024 * 1024),
+            ValidationState::Invalid { .. }
+        ));
     }
 
     #[test]
     fn test_csv_dimensions() {
         assert!(matches!(csv_dimensions(100, 10), ValidationState::Valid));
-        assert!(matches!(csv_dimensions(5, 5), ValidationState::Warning { .. }));
-        assert!(matches!(csv_dimensions(6000, 10), ValidationState::Warning { .. }));
-        assert!(matches!(csv_dimensions(11000, 10), ValidationState::Invalid { .. }));
-        assert!(matches!(csv_dimensions(100, 101), ValidationState::Invalid { .. }));
+        assert!(matches!(
+            csv_dimensions(5, 5),
+            ValidationState::Warning { .. }
+        ));
+        assert!(matches!(
+            csv_dimensions(6000, 10),
+            ValidationState::Warning { .. }
+        ));
+        assert!(matches!(
+            csv_dimensions(11000, 10),
+            ValidationState::Invalid { .. }
+        ));
+        assert!(matches!(
+            csv_dimensions(100, 101),
+            ValidationState::Invalid { .. }
+        ));
     }
 }

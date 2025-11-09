@@ -343,12 +343,7 @@ impl Transformer<f64, Matrix<f64>> for MinMaxScaler {
 impl Scaler<f64, Matrix<f64>> for MinMaxScaler {
     fn scale(&self) -> Option<Vec<f64>> {
         if let (Some(min), Some(max)) = (&self.data_min, &self.data_max) {
-            Some(
-                min.iter()
-                    .zip(max.iter())
-                    .map(|(mi, ma)| ma - mi)
-                    .collect(),
-            )
+            Some(min.iter().zip(max.iter()).map(|(mi, ma)| ma - mi).collect())
         } else {
             None
         }
@@ -615,7 +610,12 @@ mod tests {
         scaler.fit(&data).unwrap();
 
         let scaled_data = Matrix::from_vec(
-            scaler.transform(&data).unwrap().into_iter().flatten().collect(),
+            scaler
+                .transform(&data)
+                .unwrap()
+                .into_iter()
+                .flatten()
+                .collect(),
             3,
             2,
         )
@@ -661,7 +661,12 @@ mod tests {
         scaler.fit(&data).unwrap();
 
         let scaled_data = Matrix::from_vec(
-            scaler.transform(&data).unwrap().into_iter().flatten().collect(),
+            scaler
+                .transform(&data)
+                .unwrap()
+                .into_iter()
+                .flatten()
+                .collect(),
             3,
             2,
         )

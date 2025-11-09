@@ -130,8 +130,8 @@ pub fn correlation_matrix(X: &Matrix<f64>) -> Matrix<f64> {
             centered_data[i * X.cols + j] = X[(i, j)] - means[j];
         }
     }
-    let centered = Matrix::from_vec(centered_data, X.rows, X.cols)
-        .expect("Same dimensions as input");
+    let centered =
+        Matrix::from_vec(centered_data, X.rows, X.cols).expect("Same dimensions as input");
 
     // Step 3: Compute covariance matrix: (X^T * X) / (n-1)
     // This is efficient because we compute all pairwise covariances at once
@@ -194,8 +194,8 @@ pub fn standardize(X: &Matrix<f64>) -> (Matrix<f64>, Vec<f64>, Vec<f64>) {
         }
     }
 
-    let standardized = Matrix::from_vec(standardized_data, X.rows, X.cols)
-        .expect("Same dimensions as input");
+    let standardized =
+        Matrix::from_vec(standardized_data, X.rows, X.cols).expect("Same dimensions as input");
 
     (standardized, means, std_devs)
 }
@@ -232,7 +232,10 @@ mod tests {
         let x = vec![1.0, 2.0, 3.0, 4.0, 5.0];
         let y = vec![2.0, 4.0, 6.0, 8.0, 10.0];
         let corr = pearson_correlation(&x, &y);
-        assert!((corr - 1.0).abs() < 1e-10, "Perfect positive correlation should be 1.0");
+        assert!(
+            (corr - 1.0).abs() < 1e-10,
+            "Perfect positive correlation should be 1.0"
+        );
     }
 
     #[test]
@@ -240,7 +243,10 @@ mod tests {
         let x = vec![1.0, 2.0, 3.0, 4.0, 5.0];
         let y = vec![10.0, 8.0, 6.0, 4.0, 2.0];
         let corr = pearson_correlation(&x, &y);
-        assert!((corr + 1.0).abs() < 1e-10, "Perfect negative correlation should be -1.0");
+        assert!(
+            (corr + 1.0).abs() < 1e-10,
+            "Perfect negative correlation should be -1.0"
+        );
     }
 
     #[test]
@@ -273,11 +279,7 @@ mod tests {
     #[test]
     fn test_correlation_matrix_perfect_correlation() {
         // Two perfectly correlated features
-        let data = Matrix::from_vec(vec![
-            1.0, 2.0,
-            2.0, 4.0,
-            3.0, 6.0,
-        ], 3, 2).unwrap();
+        let data = Matrix::from_vec(vec![1.0, 2.0, 2.0, 4.0, 3.0, 6.0], 3, 2).unwrap();
 
         let corr = correlation_matrix(&data);
         assert_eq!(corr.rows, 2);
@@ -294,31 +296,29 @@ mod tests {
 
     #[test]
     fn test_correlation_matrix_symmetric() {
-        let data = Matrix::from_vec(vec![
-            1.0, 2.0, 3.0,
-            2.0, 3.0, 5.0,
-            3.0, 4.0, 7.0,
-            4.0, 5.0, 9.0,
-        ], 4, 3).unwrap();
+        let data = Matrix::from_vec(
+            vec![1.0, 2.0, 3.0, 2.0, 3.0, 5.0, 3.0, 4.0, 7.0, 4.0, 5.0, 9.0],
+            4,
+            3,
+        )
+        .unwrap();
 
         let corr = correlation_matrix(&data);
 
         // Matrix should be symmetric
         for i in 0..corr.rows {
             for j in 0..corr.cols {
-                assert!((corr[(i, j)] - corr[(j, i)]).abs() < 1e-10,
-                    "Correlation matrix should be symmetric");
+                assert!(
+                    (corr[(i, j)] - corr[(j, i)]).abs() < 1e-10,
+                    "Correlation matrix should be symmetric"
+                );
             }
         }
     }
 
     #[test]
     fn test_standardize() {
-        let data = Matrix::from_vec(vec![
-            1.0, 10.0,
-            2.0, 20.0,
-            3.0, 30.0,
-        ], 3, 2).unwrap();
+        let data = Matrix::from_vec(vec![1.0, 10.0, 2.0, 20.0, 3.0, 30.0], 3, 2).unwrap();
 
         let (standardized, means, _std_devs) = standardize(&data);
 
@@ -330,14 +330,20 @@ mod tests {
         for j in 0..standardized.cols {
             let col = standardized.col(j).unwrap();
             let col_mean = mean(&col.data);
-            assert!(col_mean.abs() < 1e-10, "Standardized columns should have mean 0");
+            assert!(
+                col_mean.abs() < 1e-10,
+                "Standardized columns should have mean 0"
+            );
         }
 
         // Check that standardized data has std ~1
         for j in 0..standardized.cols {
             let col = standardized.col(j).unwrap();
             let col_std = std_dev(&col.data);
-            assert!((col_std - 1.0).abs() < 1e-10, "Standardized columns should have std 1");
+            assert!(
+                (col_std - 1.0).abs() < 1e-10,
+                "Standardized columns should have std 1"
+            );
         }
     }
 }

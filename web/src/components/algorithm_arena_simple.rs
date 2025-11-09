@@ -7,9 +7,8 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn AlgorithmArenaSimple() -> Element {
-    let mut race_controller = use_signal(|| {
-        RaceController::new(LossFunction::Rosenbrock, 0.001, (-0.5, 1.5))
-    });
+    let mut race_controller =
+        use_signal(|| RaceController::new(LossFunction::Rosenbrock, 0.001, (-0.5, 1.5)));
 
     rsx! {
         div { class: "arena-container",

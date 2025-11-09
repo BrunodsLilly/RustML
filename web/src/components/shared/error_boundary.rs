@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use std::panic;
 use linear_algebra::matrix::Matrix;
+use std::panic;
 
 /// Props for the ErrorBoundary component
 #[derive(Props, Clone, PartialEq)]
@@ -178,8 +178,7 @@ pub fn validate_algorithm_input(
         if k > data.rows {
             return Err(format!(
                 "Number of clusters ({}) cannot exceed number of samples ({})",
-                k,
-                data.rows
+                k, data.rows
             ));
         }
     }

@@ -1,7 +1,7 @@
 //! Traits specific to dimensionality reduction algorithms
 
-use crate::{Data, Numeric};
 use crate::unsupervised::DimensionalityReduction;
+use crate::{Data, Numeric};
 
 /// Trait for linear dimensionality reduction methods (PCA, etc.)
 pub trait LinearReduction<T: Numeric, D: Data<T>>: DimensionalityReduction<T, D> {
