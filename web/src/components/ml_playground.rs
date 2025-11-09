@@ -437,7 +437,9 @@ fn run_logistic_regression(dataset: &CsvDataset) -> String {
 
                     // Get unique classes
                     let mut classes: Vec<f64> = dataset.targets.clone();
-                    classes.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    classes.sort_by(|a, b| {
+                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                    });
                     classes.dedup();
 
                     format!(

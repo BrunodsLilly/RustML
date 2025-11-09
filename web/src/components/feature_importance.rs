@@ -35,7 +35,9 @@ pub fn FeatureImportanceChart(
     // Sort features
     let mut sorted = standardized.clone();
     if sort_by_importance() {
-        sorted.sort_by(|a, b| b.2.abs().partial_cmp(&a.2.abs()).unwrap());
+        sorted.sort_by(|a, b| {
+            b.2.abs().partial_cmp(&a.2.abs()).unwrap_or(std::cmp::Ordering::Equal)
+        });
     } else {
         sorted.sort_by(|a, b| a.0.cmp(&b.0));
     }

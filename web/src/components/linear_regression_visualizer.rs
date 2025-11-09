@@ -128,7 +128,7 @@ pub fn LinearRegressionVisualizer(
                         {
                             let reduction = if model_val.training_history.len() > 1 {
                                 let start = model_val.training_history[0];
-                                let end = model_val.training_history.last().unwrap();
+                                let end = model_val.training_history.last().copied().unwrap_or(start);
                                 ((start - end) / start * 100.0).max(0.0).min(99.99)
                             } else {
                                 0.0

@@ -10,6 +10,7 @@ mod ml_playground;
 mod nav;
 mod optimizer_demo;
 mod optimizer_race_controller;
+pub mod shared;
 mod showcase;
 mod view;
 
@@ -25,5 +26,6 @@ pub use ml_playground::*;
 pub use nav::*;
 pub use optimizer_demo::*;
 pub use optimizer_race_controller::*;
+pub use shared::*;
 pub use showcase::*;
 pub use view::*;

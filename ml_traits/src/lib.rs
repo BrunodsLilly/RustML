@@ -11,12 +11,16 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+pub mod error;
 pub mod supervised;
 pub mod unsupervised;
 pub mod preprocessing;
 pub mod metrics;
 pub mod clustering;
 pub mod reduction;
+
+// Re-export commonly used items
+pub use error::MLError;
 
 use std::fmt::Debug;
 
