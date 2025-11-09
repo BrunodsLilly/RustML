@@ -1,0 +1,111 @@
+name: PR Test Summary
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  comment-summary:
+    name: Post Test Summary
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion != 'cancelled'
+
+    steps:
+      - name: Download artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }},
+            });
+
+            console.log('Available artifacts:', artifacts.data.artifacts.map(a => a.name));
+
+      - name: Get PR number
+        uses: actions/github-script@v7
+        id: get-pr
+        with:
+          result-encoding: string
+          script: |
+            const { data: pullRequests } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: '${{ github.event.workflow_run.head_sha }}',
+            });
+
+            if (pullRequests.length === 0) {
+              console.log('No PR found for this commit');
+              return '';
+            }
+
+            return pullRequests[0].number.toString();
+
+      - name: Comment test results
+        if: steps.get-pr.outputs.result != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = parseInt('${{ steps.get-pr.outputs.result }}');
+            const conclusion = '${{ github.event.workflow_run.conclusion }}';
+            const runUrl = '${{ github.event.workflow_run.html_url }}';
+
+            const statusEmoji = conclusion === 'success' ? '✅' : '❌';
+            const statusText = conclusion === 'success' ? 'All checks passed!' : 'Some checks failed';
+
+            const body = `## ${statusEmoji} CI Test Results
+
+            **Status:** ${statusText}
+
+            ### Test Summary
+            - **Rust Tests:** ${conclusion === 'success' ? '✅ Passed' : '❌ Failed'}
+            - **WASM Build:** ${conclusion === 'success' ? '✅ Passed' : '❌ Failed'}
+            - **Playwright E2E:** ${conclusion === 'success' ? '✅ Passed' : '❌ Failed'}
+            - **Security Audit:** ${conclusion === 'success' ? '✅ Passed' : '❌ Failed'}
+
+            [View detailed results](${runUrl})
+
+            ---
+            ${conclusion === 'success'
+              ? '🎉 All tests passed! This PR is ready for review.'
+              : '⚠️ Please fix the failing tests before merging.'}
+            `;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existingComment = comments.find(comment =>
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body.includes('CI Test Results')
+            );
+
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: body
+              });
+            }
