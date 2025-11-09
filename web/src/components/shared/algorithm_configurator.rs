@@ -481,6 +481,12 @@ pub fn ParameterControl(props: ParameterControlProps) -> Element {
         ValidationResult::Valid
     };
 
+    // Extract options if it's a Choice type
+    let options = match &props.parameter.value_type {
+        ParameterType::Choice(opts) => Some(opts.clone()),
+        _ => None,
+    };
+
     rsx! {
         div { class: "parameter-control",
             div { class: "param-header",
@@ -490,45 +496,52 @@ pub fn ParameterControl(props: ParameterControlProps) -> Element {
 
             match &props.parameter.value_type {
                 ParameterType::Integer | ParameterType::Float => {
-                    input {
-                        r#type: "range",
-                        class: "param-slider",
-                        min: "{props.parameter.constraints.min.unwrap_or(0.0)}",
-                        max: "{props.parameter.constraints.max.unwrap_or(100.0)}",
-                        step: "{props.parameter.constraints.step.unwrap_or(1.0)}",
-                        value: "{props.parameter.current_value.as_f64().unwrap_or(0.0)}",
-                        oninput: move |evt| {
-                            let val_str = evt.value();
-                            if let Ok(val) = val_str.parse::<f64>() {
-                                let new_value = match props.parameter.value_type {
-                                    ParameterType::Integer => ParameterValue::Integer(val as i64),
-                                    ParameterType::Float => ParameterValue::Float(val),
-                                    _ => return,
-                                };
-                                props.on_change.call(new_value);
+                    rsx! {
+                        input {
+                            r#type: "range",
+                            class: "param-slider",
+                            min: "{props.parameter.constraints.min.unwrap_or(0.0)}",
+                            max: "{props.parameter.constraints.max.unwrap_or(100.0)}",
+                            step: "{props.parameter.constraints.step.unwrap_or(1.0)}",
+                            value: "{props.parameter.current_value.as_f64().unwrap_or(0.0)}",
+                            oninput: move |evt| {
+                                let val_str = evt.value();
+                                if let Ok(val) = val_str.parse::<f64>() {
+                                    let new_value = match props.parameter.value_type {
+                                        ParameterType::Integer => ParameterValue::Integer(val as i64),
+                                        ParameterType::Float => ParameterValue::Float(val),
+                                        _ => return,
+                                    };
+                                    props.on_change.call(new_value);
+                                }
                             }
                         }
                     }
                 },
                 ParameterType::Boolean => {
-                    input {
-                        r#type: "checkbox",
-                        class: "param-checkbox",
-                        checked: props.parameter.current_value.as_bool().unwrap_or(false),
-                        onchange: move |evt| {
-                            props.on_change.call(ParameterValue::Boolean(evt.checked()));
+                    rsx! {
+                        input {
+                            r#type: "checkbox",
+                            class: "param-checkbox",
+                            checked: props.parameter.current_value.as_bool().unwrap_or(false),
+                            onchange: move |evt| {
+                                props.on_change.call(ParameterValue::Boolean(evt.checked()));
+                            }
                         }
                     }
                 },
-                ParameterType::Choice(options) => {
-                    select {
-                        class: "param-select",
-                        value: "{props.parameter.current_value.as_str()}",
-                        onchange: move |evt| {
-                            props.on_change.call(ParameterValue::Choice(evt.value()));
-                        },
-                        for option in options.iter() {
-                            option { value: "{option}", "{option}" }
+                ParameterType::Choice(_) => {
+                    let opts = options.clone().unwrap_or_default();
+                    rsx! {
+                        select {
+                            class: "param-select",
+                            value: "{props.parameter.current_value.as_str()}",
+                            onchange: move |evt| {
+                                props.on_change.call(ParameterValue::Choice(evt.value()));
+                            },
+                            for opt in opts.iter() {
+                                option { value: "{opt}", "{opt}" }
+                            }
                         }
                     }
                 }

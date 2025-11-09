@@ -167,7 +167,8 @@ pub fn MLPlayground() -> Element {
                             button {
                                 class: "config-button",
                                 onclick: move |_| {
-                                    show_configurator.set(!*show_configurator.read());
+                                    let current = *show_configurator.read();
+                                    show_configurator.set(!current);
                                 },
                                 "⚙️ Configure Parameters"
                             }
@@ -230,14 +231,24 @@ pub fn MLPlayground() -> Element {
                 // Right panel: Results and visualization
                 main { class: "results-panel",
                     // Performance metrics card (shown during/after training)
-                    if *show_performance.read() {
-                        if let Some(ref metrics) = *performance_metrics.read() {
-                            ModelPerformanceCard {
-                                metrics: metrics.clone(),
-                                model_name: selected_algorithm.read().name(),
-                                show_loss_chart: true,
-                                show_details: true,
+                    {
+                        let show_perf = *show_performance.read();
+                        if show_perf {
+                            if let Some(metrics) = performance_metrics.read().clone() {
+                                let algo_name = selected_algorithm.read().name().to_string();
+                                rsx! {
+                                    ModelPerformanceCard {
+                                        metrics,
+                                        model_name: algo_name,
+                                        show_loss_chart: true,
+                                        show_details: true,
+                                    }
+                                }
+                            } else {
+                                rsx! { div {} }
                             }
+                        } else {
+                            rsx! { div {} }
                         }
                     }
 

@@ -106,8 +106,8 @@ pub struct ModelPerformanceCardProps {
     /// Performance metrics
     metrics: PerformanceMetrics,
     /// Model name/type
-    #[props(default = "Model")]
-    model_name: &'static str,
+    #[props(default = "Model".to_string())]
+    model_name: String,
     /// Show loss chart
     #[props(default = true)]
     show_loss_chart: bool,
