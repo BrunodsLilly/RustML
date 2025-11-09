@@ -1,5 +1,8 @@
 # Bruno's Machine Learning Workspace
 
+[![CI](https://github.com/brunodossantos/RustML-cicd/actions/workflows/ci.yml/badge.svg)](https://github.com/brunodossantos/RustML-cicd/actions/workflows/ci.yml)
+[![Performance](https://github.com/brunodossantos/RustML-cicd/actions/workflows/performance.yml/badge.svg)](https://github.com/brunodossantos/RustML-cicd/actions/workflows/performance.yml)
+
 A Rust-based machine learning workspace with Python bindings and a web-based visualization interface built with Dioxus.
 
 ## Overview
@@ -139,6 +142,23 @@ cargo run --example linear_regression_with_one_variable -p linear_regression
 cargo run --example xor_demo -p neural_network
 # Output shows network achieving 100% accuracy on XOR problem!
 ```
+
+### CI/CD Pipeline
+
+This project uses automated testing on all pull requests:
+
+- **Rust Tests**: All unit tests, formatting (rustfmt), and linting (clippy)
+- **WASM Build**: Web application compilation and bundle size checks
+- **Playwright E2E**: Browser-based integration tests
+- **Security Audit**: Dependency vulnerability scanning
+- **Performance Benchmarks**: Optimizer performance validation
+
+**Pre-push validation:**
+```bash
+.github/scripts/pre-push.sh    # Run all checks locally before pushing
+```
+
+See [CI/CD Setup Documentation](docs/CI_CD_SETUP.md) for details.
 
 ### Python Integration
 
@@ -387,8 +407,8 @@ web (current)
 
 - [ ] **Developer Experience**
   - Add cargo-make or just recipes for common tasks
-  - Set up CI/CD pipeline (GitHub Actions)
-  - Add pre-commit hooks
+  - ✅ Set up CI/CD pipeline (GitHub Actions)
+  - ✅ Add pre-commit hooks (via pre-push script)
   - Create development containers/Docker setup
 
 ### Low Priority
