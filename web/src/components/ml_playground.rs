@@ -311,7 +311,7 @@ pub fn MLPlayground() -> Element {
                                             let current_algo = *selected_algorithm.read();
                                             if matches!(
                                                 current_algo,
-                                                Algorithm::NaiveBayes | Algorithm::DecisionTree | Algorithm::KMeans | Algorithm::PCA
+                                                Algorithm::NaiveBayes | Algorithm::DecisionTree | Algorithm::KMeans | Algorithm::PCA | Algorithm::LogisticRegression
                                             ) {
                                                 let algo_name = current_algo.name().to_string();
                                                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -327,6 +327,9 @@ pub fn MLPlayground() -> Element {
                                                         }
                                                         Algorithm::PCA => {
                                                             run_pca(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::LogisticRegression => {
+                                                            run_logistic_regression(dataset, &algorithm_params.read())
                                                         }
                                                         _ => unreachable!(),
                                                     }
@@ -970,7 +973,18 @@ fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset, params: &AlgorithmP
                 Err(e) => format!("❌ PCA failed: {}", e),
             }
         }
-        Algorithm::LogisticRegression => run_logistic_regression(dataset, params),
+        Algorithm::LogisticRegression => {
+            // LogisticRegression returns AlgorithmResults, convert to String for backward compatibility
+            match run_logistic_regression(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nAccuracy: {:.1}%\nClasses: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.accuracy.unwrap_or(0.0),
+                    results.metrics.get("Classes").map(|v| v.display()).unwrap_or("?".to_string())
+                ),
+                Err(e) => format!("❌ Logistic Regression failed: {}", e),
+            }
+        }
         Algorithm::DecisionTree => {
             // DecisionTree returns AlgorithmResults, convert to String for backward compatibility
             match run_decision_tree(dataset, params) {
@@ -1142,7 +1156,10 @@ fn run_pca(dataset: &CsvDataset, params: &AlgorithmParams) -> Result<AlgorithmRe
     })
 }
 
-fn run_logistic_regression(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+fn run_logistic_regression(
+    dataset: &CsvDataset,
+    params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
     // Logistic regression requires labels (targets)
     let mut model = LogisticRegression::new(
         params.learning_rate,
@@ -1150,37 +1167,79 @@ fn run_logistic_regression(dataset: &CsvDataset, params: &AlgorithmParams) -> St
         params.logreg_tolerance,
     );
 
-    match model.fit(&dataset.features, &dataset.targets) {
-        Ok(_) => {
-            match model.predict(&dataset.features) {
-                Ok(predictions) => {
-                    // Calculate accuracy
-                    let mut correct = 0;
-                    for (i, &pred) in predictions.iter().enumerate() {
-                        let pred_f64 = pred as f64;
-                        if (pred_f64 - dataset.targets[i]).abs() < 0.5 {
-                            correct += 1;
-                        }
-                    }
-                    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+    model.fit(&dataset.features, &dataset.targets)?;
+    let predictions = model.predict(&dataset.features)?;
 
-                    // Get unique classes
-                    let mut classes: Vec<f64> = dataset.targets.clone();
-                    classes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                    classes.dedup();
+    // Calculate accuracy
+    let correct = predictions
+        .iter()
+        .enumerate()
+        .filter(|(i, &pred)| (pred as f64 - dataset.targets[*i]).abs() < 0.5)
+        .count();
+    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
 
-                    format!(
-                        "✅ Logistic Regression completed!\n\nAccuracy: {:.2}%\nClasses: {}\nSamples: {}",
-                        accuracy,
-                        classes.len(),
-                        predictions.len()
-                    )
-                }
-                Err(e) => format!("❌ Prediction failed: {}", e),
-            }
+    // Get unique classes
+    let mut classes: Vec<f64> = dataset.targets.clone();
+    classes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    classes.dedup();
+    let n_classes = classes.len();
+
+    // Build confusion matrix
+    let mut matrix = vec![vec![0; n_classes]; n_classes];
+    for (i, &pred) in predictions.iter().enumerate() {
+        let actual = dataset.targets[i] as usize;
+        if pred < n_classes && actual < n_classes {
+            matrix[actual][pred] += 1;
         }
-        Err(e) => format!("❌ Logistic Regression failed: {}", e),
     }
+
+    let class_labels: Vec<String> = classes.iter().map(|c| format!("Class {}", c)).collect();
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Classes".to_string(), MetricValue::Integer(n_classes));
+    metrics.insert(
+        "Samples".to_string(),
+        MetricValue::Integer(predictions.len()),
+    );
+    metrics.insert(
+        "Learning Rate".to_string(),
+        MetricValue::Numeric(params.learning_rate),
+    );
+    metrics.insert(
+        "Max Iterations".to_string(),
+        MetricValue::Integer(params.logreg_max_iter),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Algorithm".to_string(), "Logistic Regression".to_string());
+    model_details.insert("Optimization".to_string(), "Gradient Descent".to_string());
+    model_details.insert(
+        "Tolerance".to_string(),
+        format!("{:.6}", params.logreg_tolerance),
+    );
+    model_details.insert(
+        "Classes".to_string(),
+        if n_classes == 2 {
+            "Binary Classification".to_string()
+        } else {
+            format!("Multiclass ({} classes)", n_classes)
+        },
+    );
+
+    Ok(AlgorithmResults {
+        algorithm_name: "Logistic Regression".to_string(),
+        accuracy: Some(accuracy),
+        predictions,
+        actual_values: Some(dataset.targets.clone()),
+        metrics,
+        visualizations: vec![Visualization::ConfusionMatrix {
+            matrix,
+            class_labels,
+        }],
+        model_details,
+    })
 }
 
 fn run_standard_scaler(dataset: &CsvDataset, _params: &AlgorithmParams) -> String {
