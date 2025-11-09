@@ -8,6 +8,7 @@ mod loss_functions;
 mod ml_playground;
 mod nav;
 mod optimizer_demo;
+mod optimizer_race_controller;
 mod showcase;
 mod view;
 
@@ -21,5 +22,6 @@ pub use loss_functions::*;
 pub use ml_playground::*;
 pub use nav::*;
 pub use optimizer_demo::*;
+pub use optimizer_race_controller::*;
 pub use showcase::*;
 pub use view::*;

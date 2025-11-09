@@ -5856,6 +5856,7 @@ dependencies = [
  "dimensionality_reduction",
  "dioxus",
  "getrandom 0.2.16",
+ "gloo-timers",
  "linear_algebra",
  "linear_regression",
  "loader",
