@@ -218,11 +218,15 @@ fn MatrixOperationsDemo() -> Element {
     let mut v2 = use_signal(|| 2.0);
 
     // Compute results
-    let matrix_a =
-        use_memo(move || Matrix::from_vec(vec![a11(), a12(), a21(), a22()], 2, 2).unwrap());
+    let matrix_a = use_memo(move || {
+        Matrix::from_vec(vec![a11(), a12(), a21(), a22()], 2, 2)
+            .expect("Failed to create 2x2 matrix A - this should never happen")
+    });
 
-    let matrix_b =
-        use_memo(move || Matrix::from_vec(vec![b11(), b12(), b21(), b22()], 2, 2).unwrap());
+    let matrix_b = use_memo(move || {
+        Matrix::from_vec(vec![b11(), b12(), b21(), b22()], 2, 2)
+            .expect("Failed to create 2x2 matrix B - this should never happen")
+    });
 
     let vector_v = use_memo(move || Vector {
         data: vec![v1(), v2()],
@@ -524,7 +528,14 @@ fn GradientDescentDemo() -> Element {
 
             // Create matrix and vector
             let n = x_vals.len();
-            let X = Matrix::from_vec(x_vals, n, 1).unwrap();
+            let X = match Matrix::from_vec(x_vals, n, 1) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("Failed to create feature matrix: {}", e);
+                    is_training.set(false);
+                    return;
+                }
+            };
             let y = Vector { data: y_vals };
 
             // Train model

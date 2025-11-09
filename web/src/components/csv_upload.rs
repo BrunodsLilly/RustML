@@ -63,8 +63,8 @@ pub fn CsvUploader(on_loaded: EventHandler<CsvDataset>) -> Element {
                 match parse_csv_preview(&contents) {
                     Ok(prev) => {
                         // Auto-select last column as target
-                        if !prev.headers.is_empty() {
-                            target_column.set(prev.headers.last().unwrap().clone());
+                        if let Some(last_header) = prev.headers.last() {
+                            target_column.set(last_header.clone());
                         }
                         preview.set(Some(prev));
                     }
