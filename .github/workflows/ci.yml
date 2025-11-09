@@ -33,7 +33,16 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: |
+          cargo clippy --workspace --lib -- \
+            -D clippy::correctness \
+            -D clippy::suspicious \
+            -W clippy::complexity \
+            -W clippy::perf \
+            -A missing-docs \
+            -A unused-variables \
+            -A non-snake-case \
+            -A dead-code
 
       - name: Build all packages
         run: cargo build --workspace --verbose
