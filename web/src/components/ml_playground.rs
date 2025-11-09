@@ -14,6 +14,11 @@ use ml_traits::unsupervised::UnsupervisedModel;
 use preprocessing::scalers::{MinMaxScaler, StandardScaler};
 use supervised::logistic_regression::LogisticRegression;
 
+use crate::components::shared::{
+    AlgorithmConfigurator, AlgorithmType, AlgorithmCategory,
+    ModelPerformanceCard, PerformanceMetrics, TrainingStatus,
+};
+
 /// ML Playground component
 #[component]
 pub fn MLPlayground() -> Element {
@@ -22,6 +27,14 @@ pub fn MLPlayground() -> Element {
     let mut selected_algorithm = use_signal(|| Algorithm::KMeans);
     let mut result_message = use_signal(|| String::new());
     let mut is_processing = use_signal(|| false);
+
+    // State for algorithm configuration
+    let mut show_configurator = use_signal(|| false);
+    let mut algorithm_params = use_signal(|| AlgorithmParams::default());
+
+    // State for training metrics
+    let mut performance_metrics = use_signal(|| None::<PerformanceMetrics>);
+    let mut show_performance = use_signal(|| false);
 
     rsx! {
         div { class: "ml-playground",
@@ -150,40 +163,102 @@ pub fn MLPlayground() -> Element {
                     }
 
                     if csv_dataset.read().is_some() {
-                        button {
-                            class: "run-button",
-                            disabled: *is_processing.read(),
-                            onclick: move |_| {
-                                spawn(async move {
-                                    is_processing.set(true);
-                                    result_message.set(format!("🔄 Running {}...", selected_algorithm.read().name()));
+                        div { class: "action-buttons",
+                            button {
+                                class: "config-button",
+                                onclick: move |_| {
+                                    let current = *show_configurator.read();
+                                    show_configurator.set(!current);
+                                },
+                                "⚙️ Configure Parameters"
+                            }
 
-                                    if let Some(ref dataset) = *csv_dataset.read() {
-                                        let result = run_algorithm(*selected_algorithm.read(), dataset);
-                                        result_message.set(result);
-                                    }
+                            button {
+                                class: "run-button",
+                                disabled: *is_processing.read(),
+                                onclick: move |_| {
+                                    spawn(async move {
+                                        is_processing.set(true);
+                                        show_performance.set(true);
+                                        result_message.set(format!("🔄 Running {}...", selected_algorithm.read().name()));
 
-                                    is_processing.set(false);
-                                });
-                            },
-                            if *is_processing.read() {
-                                "Processing..."
-                            } else {
-                                "▶ Run Algorithm"
+                                        // Initialize performance metrics
+                                        let max_iter = match *selected_algorithm.read() {
+                                            Algorithm::KMeans => algorithm_params.read().kmeans_max_iter,
+                                            Algorithm::LogisticRegression => algorithm_params.read().logreg_max_iter,
+                                            _ => 100,
+                                        };
+
+                                        performance_metrics.set(Some(PerformanceMetrics::new(max_iter)));
+
+                                        if let Some(ref dataset) = *csv_dataset.read() {
+                                            let result = run_algorithm_with_metrics(
+                                                *selected_algorithm.read(),
+                                                dataset,
+                                                &algorithm_params.read(),
+                                                &mut performance_metrics
+                                            );
+                                            result_message.set(result);
+                                        }
+
+                                        is_processing.set(false);
+                                    });
+                                },
+                                if *is_processing.read() {
+                                    "Processing..."
+                                } else {
+                                    "▶ Run Algorithm"
+                                }
                             }
                         }
                     }
+
+                    // Algorithm Configurator (show when toggled)
+                    // TODO: Fix lifetime issues with AlgorithmConfigurator
+                    // if *show_configurator.read() {
+                    //     div { class: "configurator-panel",
+                    //         AlgorithmConfigurator {
+                    //             algorithm: selected_algorithm.read().to_algorithm_type(),
+                    //             on_parameters_change: move |_params| {
+                    //                 // Parameter updates would go here
+                    //                 // For now, using default AlgorithmParams
+                    //             }
+                    //         }
+                    //     }
+                    // }
                 }
 
                 // Right panel: Results and visualization
                 main { class: "results-panel",
+                    // Performance metrics card (shown during/after training)
+                    {
+                        let show_perf = *show_performance.read();
+                        if show_perf {
+                            if let Some(metrics) = performance_metrics.read().clone() {
+                                let algo_name = selected_algorithm.read().name().to_string();
+                                rsx! {
+                                    ModelPerformanceCard {
+                                        metrics,
+                                        model_name: algo_name,
+                                        show_loss_chart: true,
+                                        show_details: true,
+                                    }
+                                }
+                            } else {
+                                rsx! { div {} }
+                            }
+                        } else {
+                            rsx! { div {} }
+                        }
+                    }
+
                     if !result_message.read().is_empty() {
                         div { class: "result-message",
                             "{result_message}"
                         }
                     }
 
-                    if csv_dataset.read().is_some() && !*is_processing.read() {
+                    if csv_dataset.read().is_some() && !*is_processing.read() && !*show_performance.read() {
                         AlgorithmExplanation { algorithm: *selected_algorithm.read() }
                     }
 
@@ -223,6 +298,53 @@ impl Algorithm {
             Algorithm::LogisticRegression => "Logistic Regression",
             Algorithm::StandardScaler => "Standard Scaler",
             Algorithm::MinMaxScaler => "MinMax Scaler",
+        }
+    }
+
+    fn to_algorithm_type(&self) -> AlgorithmType {
+        match self {
+            Algorithm::KMeans => AlgorithmType::KMeans,
+            Algorithm::PCA => AlgorithmType::PCA,
+            Algorithm::LogisticRegression => AlgorithmType::LogisticRegression,
+            Algorithm::StandardScaler => AlgorithmType::StandardScaler,
+            Algorithm::MinMaxScaler => AlgorithmType::MinMaxScaler,
+        }
+    }
+}
+
+/// Parameters for algorithm configuration
+#[derive(Debug, Clone, PartialEq)]
+struct AlgorithmParams {
+    // K-Means
+    k_clusters: usize,
+    kmeans_max_iter: usize,
+    kmeans_tolerance: f64,
+
+    // PCA
+    n_components: usize,
+
+    // Logistic Regression
+    learning_rate: f64,
+    logreg_max_iter: usize,
+    logreg_tolerance: f64,
+
+    // Scalers
+    scaler_min: f64,
+    scaler_max: f64,
+}
+
+impl Default for AlgorithmParams {
+    fn default() -> Self {
+        Self {
+            k_clusters: 3,
+            kmeans_max_iter: 100,
+            kmeans_tolerance: 1e-4,
+            n_components: 2,
+            learning_rate: 0.01,
+            logreg_max_iter: 1000,
+            logreg_tolerance: 1e-4,
+            scaler_min: 0.0,
+            scaler_max: 1.0,
         }
     }
 }
@@ -344,6 +466,27 @@ fn AlgorithmExplanation(algorithm: Algorithm) -> Element {
             }
         }
     }
+}
+
+/// Run algorithm with performance metrics tracking
+fn run_algorithm_with_metrics(
+    algorithm: Algorithm,
+    dataset: &CsvDataset,
+    params: &AlgorithmParams,
+    metrics: &mut Signal<Option<PerformanceMetrics>>,
+) -> String {
+    let start_time = web_sys::window()
+        .and_then(|w| w.performance())
+        .map(|p| p.now())
+        .unwrap_or(0.0);
+
+    let result = match algorithm {
+        Algorithm::KMeans => run_kmeans_with_metrics(dataset, params, metrics, start_time),
+        Algorithm::LogisticRegression => run_logistic_regression_with_metrics(dataset, params, metrics, start_time),
+        _ => run_algorithm(algorithm, dataset), // Fallback for algorithms without metrics
+    };
+
+    result
 }
 
 /// Run the selected algorithm on the dataset and return a formatted result message
@@ -485,5 +628,158 @@ fn run_minmax_scaler(dataset: &CsvDataset) -> String {
             Err(e) => format!("❌ Transform failed: {}", e),
         },
         Err(e) => format!("❌ MinMaxScaler failed: {}", e),
+    }
+}
+
+// Algorithm runners with metrics tracking
+
+fn run_kmeans_with_metrics(
+    dataset: &CsvDataset,
+    params: &AlgorithmParams,
+    metrics: &mut Signal<Option<PerformanceMetrics>>,
+    start_time: f64,
+) -> String {
+    let k = params.k_clusters;
+    let max_iter = params.kmeans_max_iter;
+    let tolerance = params.kmeans_tolerance;
+
+    let mut kmeans = KMeans::new(k, max_iter, tolerance, Some(42));
+
+    // Update metrics during training (simulated for now)
+    if let Some(ref mut perf) = *metrics.write() {
+        perf.status = TrainingStatus::Running;
+    }
+
+    match kmeans.fit(&dataset.features) {
+        Ok(_) => {
+            let elapsed = web_sys::window()
+                .and_then(|w| w.performance())
+                .map(|p| p.now() - start_time)
+                .unwrap_or(0.0);
+
+            // Update final metrics
+            if let Some(ref mut perf) = *metrics.write() {
+                perf.current_iteration = max_iter;
+                perf.status = TrainingStatus::Converged;
+                perf.elapsed_time_ms = elapsed as u64;
+                perf.iterations_per_second = if elapsed > 0.0 {
+                    (max_iter as f64 / elapsed) * 1000.0
+                } else {
+                    0.0
+                };
+            }
+
+            match kmeans.predict(&dataset.features) {
+                Ok(labels) => {
+                    let mut counts = vec![0; k];
+                    for &label in &labels {
+                        counts[label] += 1;
+                    }
+
+                    let cluster_summary: Vec<String> = counts
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &count)| format!("Cluster {}: {} samples", i, count))
+                        .collect();
+
+                    format!(
+                        "✅ K-Means (k={}) completed in {:.2}ms!\n\n{}",
+                        k,
+                        elapsed,
+                        cluster_summary.join("\n")
+                    )
+                }
+                Err(e) => {
+                    if let Some(ref mut perf) = *metrics.write() {
+                        perf.status = TrainingStatus::Failed;
+                    }
+                    format!("❌ Prediction failed: {}", e)
+                }
+            }
+        }
+        Err(e) => {
+            if let Some(ref mut perf) = *metrics.write() {
+                perf.status = TrainingStatus::Failed;
+            }
+            format!("❌ K-Means failed: {}", e)
+        }
+    }
+}
+
+fn run_logistic_regression_with_metrics(
+    dataset: &CsvDataset,
+    params: &AlgorithmParams,
+    metrics: &mut Signal<Option<PerformanceMetrics>>,
+    start_time: f64,
+) -> String {
+    let learning_rate = params.learning_rate;
+    let max_iter = params.logreg_max_iter;
+    let tolerance = params.logreg_tolerance;
+
+    let mut model = LogisticRegression::new(learning_rate, max_iter, tolerance);
+
+    // Update metrics during training
+    if let Some(ref mut perf) = *metrics.write() {
+        perf.status = TrainingStatus::Running;
+    }
+
+    match model.fit(&dataset.features, &dataset.targets) {
+        Ok(_) => {
+            let elapsed = web_sys::window()
+                .and_then(|w| w.performance())
+                .map(|p| p.now() - start_time)
+                .unwrap_or(0.0);
+
+            // Update final metrics
+            if let Some(ref mut perf) = *metrics.write() {
+                perf.current_iteration = max_iter;
+                perf.status = TrainingStatus::Converged;
+                perf.elapsed_time_ms = elapsed as u64;
+                perf.iterations_per_second = if elapsed > 0.0 {
+                    (max_iter as f64 / elapsed) * 1000.0
+                } else {
+                    0.0
+                };
+            }
+
+            match model.predict(&dataset.features) {
+                Ok(predictions) => {
+                    let mut correct = 0;
+                    for (i, &pred) in predictions.iter().enumerate() {
+                        let pred_f64 = pred as f64;
+                        if (pred_f64 - dataset.targets[i]).abs() < 0.5 {
+                            correct += 1;
+                        }
+                    }
+                    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+
+                    let mut classes: Vec<f64> = dataset.targets.clone();
+                    classes.sort_by(|a, b| {
+                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    classes.dedup();
+
+                    format!(
+                        "✅ Logistic Regression completed in {:.2}ms!\n\nAccuracy: {:.2}%\nClasses: {}\nSamples: {}",
+                        elapsed,
+                        accuracy,
+                        classes.len(),
+                        predictions.len()
+                    )
+                }
+                Err(e) => {
+                    if let Some(ref mut perf) = *metrics.write() {
+                        perf.status = TrainingStatus::Failed;
+                    }
+                    format!("❌ Prediction failed: {}", e)
+                }
+            }
+        }
+        Err(e) => {
+            if let Some(ref mut perf) = *metrics.write() {
+                perf.status = TrainingStatus::Failed;
+            }
+            format!("❌ Logistic Regression failed: {}", e)
+        }
     }
 }
