@@ -7,6 +7,7 @@ mod loss_functions;
 mod ml_playground;
 mod nav;
 mod optimizer_demo;
+pub mod shared;
 mod showcase;
 mod view;
 
@@ -19,5 +20,6 @@ pub use loss_functions::*;
 pub use ml_playground::*;
 pub use nav::*;
 pub use optimizer_demo::*;
+pub use shared::*;
 pub use showcase::*;
 pub use view::*;
