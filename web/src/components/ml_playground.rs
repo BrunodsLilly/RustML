@@ -10,7 +10,7 @@ use decision_tree::{DecisionTreeClassifier, SplitCriterion};
 use dimensionality_reduction::pca::PCA;
 use dioxus::prelude::*;
 use loader::csv_loader::CsvDataset;
-use ml_traits::clustering::Clusterer;
+use ml_traits::clustering::{CentroidClusterer, Clusterer};
 use ml_traits::preprocessing::Transformer;
 use ml_traits::supervised::SupervisedModel;
 use ml_traits::unsupervised::UnsupervisedModel;
@@ -309,7 +309,10 @@ pub fn MLPlayground() -> Element {
                                         if let Some(ref dataset) = *csv_dataset.read() {
                                             // Special handling for algorithms with new results display
                                             let current_algo = *selected_algorithm.read();
-                                            if matches!(current_algo, Algorithm::NaiveBayes | Algorithm::DecisionTree) {
+                                            if matches!(
+                                                current_algo,
+                                                Algorithm::NaiveBayes | Algorithm::DecisionTree | Algorithm::KMeans
+                                            ) {
                                                 let algo_name = current_algo.name().to_string();
                                                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                                     match current_algo {
@@ -318,6 +321,9 @@ pub fn MLPlayground() -> Element {
                                                         }
                                                         Algorithm::DecisionTree => {
                                                             run_decision_tree(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::KMeans => {
+                                                            run_kmeans(dataset, &algorithm_params.read())
                                                         }
                                                         _ => unreachable!(),
                                                     }
@@ -936,7 +942,18 @@ fn run_algorithm_with_metrics(
 /// Run the selected algorithm on the dataset and return a formatted result message
 fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset, params: &AlgorithmParams) -> String {
     match algorithm {
-        Algorithm::KMeans => run_kmeans(dataset, params),
+        Algorithm::KMeans => {
+            // KMeans returns AlgorithmResults, convert to String for backward compatibility
+            match run_kmeans(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nClusters: {}\nSamples: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.metrics.get("Clusters (k)").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.predictions.len()
+                ),
+                Err(e) => format!("❌ K-Means failed: {}", e),
+            }
+        }
         Algorithm::PCA => run_pca(dataset, params),
         Algorithm::LogisticRegression => run_logistic_regression(dataset, params),
         Algorithm::DecisionTree => {
@@ -970,37 +987,68 @@ fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset, params: &AlgorithmP
 
 // Actual implementations - now enabled with correct trait syntax
 
-fn run_kmeans(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+fn run_kmeans(dataset: &CsvDataset, params: &AlgorithmParams) -> Result<AlgorithmResults, String> {
     let k = params.k_clusters;
     let mut kmeans = KMeans::new(k, params.kmeans_max_iter, params.kmeans_tolerance, Some(42));
 
-    match kmeans.fit(&dataset.features) {
-        Ok(_) => {
-            match kmeans.predict(&dataset.features) {
-                Ok(labels) => {
-                    // Count samples per cluster
-                    let mut counts = vec![0; k];
-                    for &label in &labels {
-                        counts[label] += 1;
-                    }
+    kmeans.fit(&dataset.features)?;
+    let labels = kmeans.predict(&dataset.features)?;
 
-                    let cluster_summary: Vec<String> = counts
-                        .iter()
-                        .enumerate()
-                        .map(|(i, &count)| format!("Cluster {}: {} samples", i, count))
-                        .collect();
-
-                    format!(
-                        "✅ K-Means (k={}) completed!\n\n{}",
-                        k,
-                        cluster_summary.join("\n")
-                    )
-                }
-                Err(e) => format!("❌ Prediction failed: {}", e),
-            }
-        }
-        Err(e) => format!("❌ K-Means failed: {}", e),
+    // Count samples per cluster
+    let mut cluster_sizes = vec![0; k];
+    for &label in &labels {
+        cluster_sizes[label] += 1;
     }
+
+    // Get cluster centers if available
+    let cluster_centers = kmeans.cluster_centers();
+    let inertia = kmeans.inertia();
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Clusters (k)".to_string(), MetricValue::Integer(k));
+    metrics.insert("Samples".to_string(), MetricValue::Integer(labels.len()));
+    metrics.insert(
+        "Iterations".to_string(),
+        MetricValue::Integer(kmeans.n_iterations()),
+    );
+    if let Some(inertia_val) = inertia {
+        metrics.insert("Inertia".to_string(), MetricValue::Numeric(inertia_val));
+    }
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Algorithm".to_string(), "K-Means".to_string());
+    model_details.insert("Initialization".to_string(), "K-Means++".to_string());
+    model_details.insert(
+        "Max Iterations".to_string(),
+        params.kmeans_max_iter.to_string(),
+    );
+    model_details.insert(
+        "Tolerance".to_string(),
+        format!("{:.4}", params.kmeans_tolerance),
+    );
+    model_details.insert(
+        "Converged".to_string(),
+        if kmeans.n_iterations() < params.kmeans_max_iter {
+            "Yes".to_string()
+        } else {
+            "No (reached max iterations)".to_string()
+        },
+    );
+
+    Ok(AlgorithmResults {
+        algorithm_name: "K-Means Clustering".to_string(),
+        accuracy: None, // Unsupervised - no accuracy
+        predictions: labels,
+        actual_values: None, // Unsupervised - no ground truth
+        metrics,
+        visualizations: vec![Visualization::ClusterDistribution {
+            cluster_sizes,
+            cluster_centers,
+        }],
+        model_details,
+    })
 }
 
 fn run_pca(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
