@@ -1076,3 +1076,4 @@ Before marking feature "complete":
 6. Optimize K-Means with row_slice() to eliminate 200K allocations (30 min)
 7. Run `cargo test --all` before ANY commit
 8. Update this file with progress after completing Week 1 fixes
+- Why did you stop? You are supposed to keep going all night! If you run out of things to do, create new things to do!
