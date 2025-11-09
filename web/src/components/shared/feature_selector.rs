@@ -79,9 +79,10 @@ impl Feature {
             let unique_values: std::collections::HashSet<String> =
                 non_empty.iter().map(|s| (*s).clone()).collect();
 
-            if unique_values.len() == 2 &&
-               unique_values.contains("0") &&
-               unique_values.contains("1") {
+            if unique_values.len() == 2
+                && unique_values.contains("0")
+                && unique_values.contains("1")
+            {
                 return DataType::Binary;
             }
             return DataType::Numeric;
@@ -179,8 +180,11 @@ pub fn FeatureSelector(props: FeatureSelectorProps) -> Element {
     let available: Vec<&Feature> = filtered_features
         .iter()
         .filter(|f| {
-            !props.selected.contains(&f.name) &&
-            props.target_column.as_ref().map_or(true, |target| &f.name != target)
+            !props.selected.contains(&f.name)
+                && props
+                    .target_column
+                    .as_ref()
+                    .map_or(true, |target| &f.name != target)
         })
         .copied()
         .collect();
@@ -405,14 +409,24 @@ mod tests {
 
     #[test]
     fn test_infer_binary_dtype() {
-        let values = vec!["0".to_string(), "1".to_string(), "0".to_string(), "1".to_string()];
+        let values = vec![
+            "0".to_string(),
+            "1".to_string(),
+            "0".to_string(),
+            "1".to_string(),
+        ];
         let dtype = Feature::infer_dtype(&values);
         assert_eq!(dtype, DataType::Binary);
     }
 
     #[test]
     fn test_infer_categorical_dtype() {
-        let values = vec!["red".to_string(), "blue".to_string(), "red".to_string(), "green".to_string()];
+        let values = vec![
+            "red".to_string(),
+            "blue".to_string(),
+            "red".to_string(),
+            "green".to_string(),
+        ];
         let dtype = Feature::infer_dtype(&values);
         assert_eq!(dtype, DataType::Categorical);
     }

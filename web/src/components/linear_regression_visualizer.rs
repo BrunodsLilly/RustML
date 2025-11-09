@@ -30,11 +30,7 @@ pub fn LinearRegressionVisualizer(
         .map(|j| {
             let col = dataset_val.features.col(j).expect("Valid column index");
             let mean = col.data.iter().sum::<f64>() / col.data.len() as f64;
-            let variance = col
-                .data
-                .iter()
-                .map(|&x| (x - mean).powi(2))
-                .sum::<f64>()
+            let variance = col.data.iter().map(|&x| (x - mean).powi(2)).sum::<f64>()
                 / (col.data.len() - 1) as f64;
             variance
         })
@@ -218,7 +214,9 @@ fn generate_tips(dataset: &CsvDataset, corr_matrix: &Matrix<f64>) -> Vec<String>
     }
 
     if tips.is_empty() {
-        tips.push("Your dataset looks good! Explore the tabs to understand your model.".to_string());
+        tips.push(
+            "Your dataset looks good! Explore the tabs to understand your model.".to_string(),
+        );
     }
 
     tips
@@ -232,16 +230,7 @@ mod tests {
     #[test]
     fn test_generate_tips_high_correlation() {
         // Create dataset with 2 perfectly correlated features
-        let features = Matrix::from_vec(
-            vec![
-                1.0, 1.0,
-                2.0, 2.0,
-                3.0, 3.0,
-            ],
-            3,
-            2,
-        )
-        .unwrap();
+        let features = Matrix::from_vec(vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0], 3, 2).unwrap();
 
         let dataset = CsvDataset {
             features,
@@ -285,15 +274,7 @@ mod tests {
     #[test]
     fn test_generate_tips_small_sample() {
         // Create dataset with few samples relative to features
-        let features = Matrix::from_vec(
-            vec![
-                1.0, 2.0, 3.0,
-                4.0, 5.0, 6.0,
-            ],
-            2,
-            3,
-        )
-        .unwrap();
+        let features = Matrix::from_vec(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3).unwrap();
 
         let dataset = CsvDataset {
             features,

@@ -5,4 +5,4 @@
 
 pub mod scalers;
 
-pub use scalers::{StandardScaler, MinMaxScaler, RobustScaler};
+pub use scalers::{MinMaxScaler, RobustScaler, StandardScaler};

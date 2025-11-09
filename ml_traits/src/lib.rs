@@ -11,13 +11,13 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+pub mod clustering;
 pub mod error;
+pub mod metrics;
+pub mod preprocessing;
+pub mod reduction;
 pub mod supervised;
 pub mod unsupervised;
-pub mod preprocessing;
-pub mod metrics;
-pub mod clustering;
-pub mod reduction;
 
 // Re-export commonly used items
 pub use error::MLError;
@@ -62,48 +62,76 @@ pub trait Numeric:
 
 impl Numeric for f32 {
     #[inline]
-    fn zero() -> Self { 0.0 }
+    fn zero() -> Self {
+        0.0
+    }
 
     #[inline]
-    fn one() -> Self { 1.0 }
+    fn one() -> Self {
+        1.0
+    }
 
     #[inline]
-    fn from_f64(value: f64) -> Self { value as f32 }
+    fn from_f64(value: f64) -> Self {
+        value as f32
+    }
 
     #[inline]
-    fn to_f64(self) -> f64 { self as f64 }
+    fn to_f64(self) -> f64 {
+        self as f64
+    }
 
     #[inline]
-    fn abs(self) -> Self { f32::abs(self) }
+    fn abs(self) -> Self {
+        f32::abs(self)
+    }
 
     #[inline]
-    fn sqrt(self) -> Self { f32::sqrt(self) }
+    fn sqrt(self) -> Self {
+        f32::sqrt(self)
+    }
 
     #[inline]
-    fn powf(self, exp: Self) -> Self { f32::powf(self, exp) }
+    fn powf(self, exp: Self) -> Self {
+        f32::powf(self, exp)
+    }
 }
 
 impl Numeric for f64 {
     #[inline]
-    fn zero() -> Self { 0.0 }
+    fn zero() -> Self {
+        0.0
+    }
 
     #[inline]
-    fn one() -> Self { 1.0 }
+    fn one() -> Self {
+        1.0
+    }
 
     #[inline]
-    fn from_f64(value: f64) -> Self { value }
+    fn from_f64(value: f64) -> Self {
+        value
+    }
 
     #[inline]
-    fn to_f64(self) -> f64 { self }
+    fn to_f64(self) -> f64 {
+        self
+    }
 
     #[inline]
-    fn abs(self) -> Self { f64::abs(self) }
+    fn abs(self) -> Self {
+        f64::abs(self)
+    }
 
     #[inline]
-    fn sqrt(self) -> Self { f64::sqrt(self) }
+    fn sqrt(self) -> Self {
+        f64::sqrt(self)
+    }
 
     #[inline]
-    fn powf(self, exp: Self) -> Self { f64::powf(self, exp) }
+    fn powf(self, exp: Self) -> Self {
+        f64::powf(self, exp)
+    }
 }
 
 /// Trait for data that can be used in ML algorithms

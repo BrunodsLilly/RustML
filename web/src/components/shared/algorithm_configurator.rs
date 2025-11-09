@@ -25,11 +25,17 @@ impl AlgorithmType {
 
     pub fn description(&self) -> &'static str {
         match self {
-            AlgorithmType::KMeans => "Unsupervised clustering algorithm that partitions data into k groups",
-            AlgorithmType::PCA => "Dimensionality reduction technique using orthogonal transformation",
+            AlgorithmType::KMeans => {
+                "Unsupervised clustering algorithm that partitions data into k groups"
+            }
+            AlgorithmType::PCA => {
+                "Dimensionality reduction technique using orthogonal transformation"
+            }
             AlgorithmType::LogisticRegression => "Binary classification using logistic function",
             AlgorithmType::LinearRegression => "Linear model for regression problems",
-            AlgorithmType::StandardScaler => "Standardize features by removing mean and scaling to unit variance",
+            AlgorithmType::StandardScaler => {
+                "Standardize features by removing mean and scaling to unit variance"
+            }
             AlgorithmType::MinMaxScaler => "Scale features to a given range (default 0-1)",
         }
     }
@@ -51,7 +57,9 @@ impl AlgorithmType {
             AlgorithmType::PCA => AlgorithmCategory::DimensionalityReduction,
             AlgorithmType::LogisticRegression => AlgorithmCategory::Classification,
             AlgorithmType::LinearRegression => AlgorithmCategory::Regression,
-            AlgorithmType::StandardScaler | AlgorithmType::MinMaxScaler => AlgorithmCategory::Preprocessing,
+            AlgorithmType::StandardScaler | AlgorithmType::MinMaxScaler => {
+                AlgorithmCategory::Preprocessing
+            }
         }
     }
 }
@@ -217,7 +225,10 @@ pub fn get_algorithm_parameters(algo: AlgorithmType) -> Vec<AlgorithmParameter> 
                     min: Some(1.0),
                     max: Some(1000.0),
                     step: Some(10.0),
-                    warning_threshold: Some((500.0, "High iteration count may be slow".to_string())),
+                    warning_threshold: Some((
+                        500.0,
+                        "High iteration count may be slow".to_string(),
+                    )),
                 },
             },
             AlgorithmParameter {
@@ -235,22 +246,20 @@ pub fn get_algorithm_parameters(algo: AlgorithmType) -> Vec<AlgorithmParameter> 
                 },
             },
         ],
-        AlgorithmType::PCA => vec![
-            AlgorithmParameter {
-                name: "n_components".to_string(),
-                display_name: "Number of Components".to_string(),
-                description: "Number of principal components to keep".to_string(),
-                value_type: ParameterType::Integer,
-                default_value: ParameterValue::Integer(2),
-                current_value: ParameterValue::Integer(2),
-                constraints: ParameterConstraints {
-                    min: Some(1.0),
-                    max: Some(50.0),
-                    step: Some(1.0),
-                    warning_threshold: None,
-                },
+        AlgorithmType::PCA => vec![AlgorithmParameter {
+            name: "n_components".to_string(),
+            display_name: "Number of Components".to_string(),
+            description: "Number of principal components to keep".to_string(),
+            value_type: ParameterType::Integer,
+            default_value: ParameterValue::Integer(2),
+            current_value: ParameterValue::Integer(2),
+            constraints: ParameterConstraints {
+                min: Some(1.0),
+                max: Some(50.0),
+                step: Some(1.0),
+                warning_threshold: None,
             },
-        ],
+        }],
         AlgorithmType::LogisticRegression => vec![
             AlgorithmParameter {
                 name: "learning_rate".to_string(),
@@ -263,7 +272,10 @@ pub fn get_algorithm_parameters(algo: AlgorithmType) -> Vec<AlgorithmParameter> 
                     min: Some(1e-5),
                     max: Some(1.0),
                     step: Some(0.001),
-                    warning_threshold: Some((0.1, "High learning rate may cause instability".to_string())),
+                    warning_threshold: Some((
+                        0.1,
+                        "High learning rate may cause instability".to_string(),
+                    )),
                 },
             },
             AlgorithmParameter {
@@ -350,7 +362,10 @@ pub struct AlgorithmConfiguratorProps {
 #[component]
 pub fn AlgorithmConfigurator(props: AlgorithmConfiguratorProps) -> Element {
     let params = use_signal(|| {
-        props.parameters.clone().unwrap_or_else(|| get_algorithm_parameters(props.algorithm))
+        props
+            .parameters
+            .clone()
+            .unwrap_or_else(|| get_algorithm_parameters(props.algorithm))
     });
 
     rsx! {
@@ -597,9 +612,18 @@ mod tests {
         };
 
         assert!(matches!(constraints.validate(5.0), ValidationResult::Valid));
-        assert!(matches!(constraints.validate(9.0), ValidationResult::Warning(_)));
-        assert!(matches!(constraints.validate(11.0), ValidationResult::Error(_)));
-        assert!(matches!(constraints.validate(-1.0), ValidationResult::Error(_)));
+        assert!(matches!(
+            constraints.validate(9.0),
+            ValidationResult::Warning(_)
+        ));
+        assert!(matches!(
+            constraints.validate(11.0),
+            ValidationResult::Error(_)
+        ));
+        assert!(matches!(
+            constraints.validate(-1.0),
+            ValidationResult::Error(_)
+        ));
     }
 
     #[test]

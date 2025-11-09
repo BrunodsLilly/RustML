@@ -3,19 +3,19 @@
 //! This component provides a comprehensive interface for testing all ML algorithms
 //! with user-uploaded CSV data.
 
-use dioxus::prelude::*;
-use loader::csv_loader::CsvDataset;
 use clustering::kmeans::KMeans;
 use dimensionality_reduction::pca::PCA;
-use preprocessing::scalers::{StandardScaler, MinMaxScaler};
-use supervised::logistic_regression::LogisticRegression;
+use dioxus::prelude::*;
+use loader::csv_loader::CsvDataset;
 use ml_traits::clustering::Clusterer;
-use ml_traits::unsupervised::UnsupervisedModel;
 use ml_traits::preprocessing::Transformer;
 use ml_traits::supervised::SupervisedModel;
+use ml_traits::unsupervised::UnsupervisedModel;
+use preprocessing::scalers::{MinMaxScaler, StandardScaler};
+use supervised::logistic_regression::LogisticRegression;
 
 use crate::components::shared::{
-    AlgorithmConfigurator, AlgorithmType, AlgorithmCategory, AlgorithmParameter,
+    AlgorithmCategory, AlgorithmConfigurator, AlgorithmParameter, AlgorithmType,
     ModelPerformanceCard, PerformanceMetrics, TrainingStatus,
 };
 
@@ -229,7 +229,7 @@ pub fn MLPlayground() -> Element {
                                             // Update parameters based on algorithm type
                                             for param in params {
                                                 match param.name.as_str() {
-                                                    "k" => if let Some(val) = param.current_value.as_i64() {
+                                                    "n_clusters" => if let Some(val) = param.current_value.as_i64() {
                                                         current_params.k_clusters = val as usize;
                                                     },
                                                     "max_iterations" => if let Some(val) = param.current_value.as_i64() {
@@ -525,7 +525,9 @@ fn run_algorithm_with_metrics(
 
     let result = match algorithm {
         Algorithm::KMeans => run_kmeans_with_metrics(dataset, params, metrics, start_time),
-        Algorithm::LogisticRegression => run_logistic_regression_with_metrics(dataset, params, metrics, start_time),
+        Algorithm::LogisticRegression => {
+            run_logistic_regression_with_metrics(dataset, params, metrics, start_time)
+        }
         _ => run_algorithm(algorithm, dataset, params), // Fallback for algorithms without metrics
     };
 
@@ -587,14 +589,12 @@ fn run_pca(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
             match pca.transform(&dataset.features) {
                 Ok(_transformed) => {
                     // Get explained variance if available
-                    let explained_text = format!("Reduced from {} to {} dimensions",
-                        dataset.features.cols,
-                        n_components);
+                    let explained_text = format!(
+                        "Reduced from {} to {} dimensions",
+                        dataset.features.cols, n_components
+                    );
 
-                    format!(
-                        "✅ PCA completed!\n\n{}",
-                        explained_text
-                    )
+                    format!("✅ PCA completed!\n\n{}", explained_text)
                 }
                 Err(e) => format!("❌ Transform failed: {}", e),
             }
@@ -605,7 +605,11 @@ fn run_pca(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
 
 fn run_logistic_regression(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
     // Logistic regression requires labels (targets)
-    let mut model = LogisticRegression::new(params.learning_rate, params.logreg_max_iter, params.logreg_tolerance);
+    let mut model = LogisticRegression::new(
+        params.learning_rate,
+        params.logreg_max_iter,
+        params.logreg_tolerance,
+    );
 
     match model.fit(&dataset.features, &dataset.targets) {
         Ok(_) => {
@@ -623,9 +627,7 @@ fn run_logistic_regression(dataset: &CsvDataset, params: &AlgorithmParams) -> St
 
                     // Get unique classes
                     let mut classes: Vec<f64> = dataset.targets.clone();
-                    classes.sort_by(|a, b| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    });
+                    classes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                     classes.dedup();
 
                     format!(
@@ -646,18 +648,16 @@ fn run_standard_scaler(dataset: &CsvDataset, _params: &AlgorithmParams) -> Strin
     let mut scaler = StandardScaler::new();
 
     match scaler.fit(&dataset.features) {
-        Ok(_) => {
-            match scaler.transform(&dataset.features) {
-                Ok(scaled) => {
-                    format!(
+        Ok(_) => match scaler.transform(&dataset.features) {
+            Ok(scaled) => {
+                format!(
                         "✅ StandardScaler completed!\n\nScaled {} features to μ=0, σ=1\nTransformed {} samples",
                         dataset.features.cols,
                         scaled.len()
                     )
-                }
-                Err(e) => format!("❌ Transform failed: {}", e),
             }
-        }
+            Err(e) => format!("❌ Transform failed: {}", e),
+        },
         Err(e) => format!("❌ StandardScaler failed: {}", e),
     }
 }
@@ -666,20 +666,18 @@ fn run_minmax_scaler(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
     let mut scaler = MinMaxScaler::new(params.scaler_min, params.scaler_max);
 
     match scaler.fit(&dataset.features) {
-        Ok(_) => {
-            match scaler.transform(&dataset.features) {
-                Ok(scaled) => {
-                    format!(
+        Ok(_) => match scaler.transform(&dataset.features) {
+            Ok(scaled) => {
+                format!(
                         "✅ MinMaxScaler completed!\n\nScaled {} features to [{}, {}]\nTransformed {} samples",
                         dataset.features.cols,
                         params.scaler_min,
                         params.scaler_max,
                         scaled.len()
                     )
-                }
-                Err(e) => format!("❌ Transform failed: {}", e),
             }
-        }
+            Err(e) => format!("❌ Transform failed: {}", e),
+        },
         Err(e) => format!("❌ MinMaxScaler failed: {}", e),
     }
 }
@@ -807,9 +805,7 @@ fn run_logistic_regression_with_metrics(
                     let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
 
                     let mut classes: Vec<f64> = dataset.targets.clone();
-                    classes.sort_by(|a, b| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    });
+                    classes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                     classes.dedup();
 
                     format!(
