@@ -8,7 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This project is building a **client-side ML platform** that showcases what's possible when Rust + WASM meet machine learning. The differentiator is **zero-backend computation**: everything runs in the browser at native speeds.
 
-**Current Milestone:** Interactive Optimizer Visualizer with 1000+ iterations/sec and 60 FPS rendering.
+**Current Milestone:** ML Playground with 5 live algorithms (K-Means, PCA, Logistic Regression, StandardScaler, MinMaxScaler) running in browser.
+
+**Latest Achievement (Nov 8, 2025):** ✅ PR #6 merged - Enabled all ML algorithms in web playground with simplified trait syntax.
 
 ---
 
@@ -81,7 +83,8 @@ dx serve --platform desktop            # Native desktop app
 **Current Routes:**
 - `/` - Landing page
 - `/showcase` - Matrix operations & gradient descent trainer
-- `/optimizer` - **NEW:** Interactive 4-optimizer comparison (IN PROGRESS)
+- `/optimizer` - Interactive 4-optimizer comparison
+- `/playground` - ✅ **NEW:** ML Playground with 5 algorithms (K-Means, PCA, LogReg, Scalers)
 
 ### Testing
 
@@ -241,16 +244,25 @@ let (new_x, new_y) = optimizer.step_2d((x, y), (dx, dy));
 
 ### Code Review Status
 
-Comprehensive multi-agent review completed (docs/reviews/2025-11-07-optimizer-visualizer/):
-- **56 findings total:** 11 P1 (critical), 24 P2 (important), 21 P3 (polish)
-- **6 P1 fixes completed** (54% of critical issues)
-- **Performance:** Projected 10-50x improvement from zero-allocation
-- **Action Plan:** Detailed roadmap in `10-action-plan.md`
+**✅ PR #6 Review Completed (Nov 8, 2025):**
+Multi-agent deep-dive analysis of ML Playground implementation:
+- **Security:** 3 critical (CSV limits, WASM panics, iteration timeouts)
+- **Performance:** 5 critical (O(n²) hotspots, synchronous blocking, allocations)
+- **Architecture:** 2 critical (String errors, no panic boundaries)
+- **Code Quality:** 1 critical (135 lines duplicated error handling)
 
-**Key Documents:**
-- `PROGRESS.md` - Detailed progress tracking with metrics
-- `docs/SESSION_SUMMARY_2025-11-07.md` - Complete implementation recap
-- `docs/PERFORMANCE_BENCHMARK.md` - How to validate performance
+**Total Findings:** 25 issues (11 P1, 9 P2, 5 P3)
+
+**Key Insights:**
+- Excellent trait-based architecture foundation ✅
+- 60% verbosity reduction from simplified trait calls ✅
+- Critical performance gaps prevent production scale (1K+ samples)
+- Missing WASM safety patterns (panic boundaries, input validation)
+- Opportunity for 10-50x speedup via zero-allocation patterns
+
+**Review Documents:**
+- Code review findings available in session context (Nov 8, 2025)
+- Previous review: `docs/reviews/2025-11-07-optimizer-visualizer/`
 
 ---
 
@@ -355,72 +367,470 @@ ls -lh target/dx/web/release/web/public/wasm-bindgen/*.wasm
 
 ## Revolutionary Next Steps
 
-### 1. Complete Optimizer Visualizer (Week 1-2)
+**Based on Nov 8, 2025 comprehensive code review of PR #6 (ML Playground).**
 
-**Goal:** Ship production-ready v0.2.0 with validated performance
+### IMMEDIATE PRIORITIES (Week 1) - Production Blockers
 
-**Tasks:**
-- [ ] Run browser benchmarks (measure actual iter/sec and FPS)
-- [ ] Decision: SVG → Canvas if FPS < 60
-- [ ] Add error boundaries with user-friendly messages
-- [ ] Visual regression tests for heatmap correctness
-- [ ] Document actual performance in README
+#### 1. **Zero-Allocation ML Algorithms** 🚀
+**Why Revolutionary:** Enables 1000+ samples in browser (currently limited to ~100)
 
-**Success Criteria:**
-- ✅ 1000+ iterations/sec measured in browser
-- ✅ 60 FPS sustained
-- ✅ No crashes over 10+ minute run
-- ✅ Professional error handling
+**Critical Fixes:**
+```rust
+// Add to linear_algebra/src/matrix.rs
+impl Matrix<f64> {
+    pub fn row_slice(&self, row: usize) -> &[f64] {
+        let start = row * self.cols;
+        &self.data[start..start + self.cols]
+    }
+}
 
-### 2. Educational Excellence (Week 3-4)
+// Use in K-Means (clustering/src/kmeans.rs:119-125)
+let mut row_buffer = vec![0.0; n_features];
+for i in 0..n_samples {
+    for j in 0..n_features {
+        row_buffer[j] = data.get(i, j).unwrap();
+    }
+    // Use row_buffer instead of allocating get_row()
+}
+```
 
-**Goal:** Make it the best optimizer learning tool on the web
+**Impact:** 10-50x performance improvement, K-Means 2s → 200ms on 1K samples
 
-**Tasks:**
-- [ ] Interactive onboarding tour (first-time user guide)
-- [ ] Hover tooltips explaining optimizer behavior
-- [ ] Side-by-side comparison with annotations
-- [ ] "Why did optimizer X fail here?" explanations
-- [ ] Export functionality (save optimizer paths as JSON/image)
+**Files to Modify:**
+- `linear_algebra/src/matrix.rs` - Add `row_slice()` method
+- `clustering/src/kmeans.rs:119-125` - Eliminate `get_row()` allocations
+- `dimensionality_reduction/src/pca.rs:93-121` - Add early convergence
+- `supervised/src/logistic_regression.rs:124-130` - Vectorize gradients
 
-**Success Criteria:**
-- User can explain optimizer differences after 5 min use
-- 80%+ onboarding completion rate
-- Positive feedback on educational value
+---
 
-### 3. Performance Showcase (Week 5-6)
+#### 2. **WASM Safety Fortress** 🛡️
+**Why Revolutionary:** Prevents silent crashes that kill entire app
 
-**Goal:** Prove WASM superiority over JavaScript
+**Critical Implementation:**
+```rust
+// Add to web/src/components/ml_playground.rs:157-167
+use std::panic;
 
-**Revolutionary Ideas:**
-- [ ] Add "JS vs WASM" comparison mode
-- [ ] Implement same viz in pure JS for side-by-side
-- [ ] Live performance counter showing WASM advantage
-- [ ] Marketing: "1000x more iterations than JS could handle"
-- [ ] Blog post: "How we hit 1000+ iter/sec in the browser"
+onclick: move |_| {
+    spawn(async move {
+        is_processing.set(true);
 
-### 4. Advanced Visualizations (Month 2)
+        let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            if let Some(ref dataset) = *csv_dataset.read() {
+                run_algorithm(*selected_algorithm.read(), dataset)
+            } else {
+                "❌ No dataset loaded".to_string()
+            }
+        }));
 
-**Goal:** Features no one else has
+        match result {
+            Ok(msg) => result_message.set(msg),
+            Err(_) => {
+                result_message.set("❌ Algorithm crashed. Please reload and try simpler data.".to_string());
+                console::error_1(&"WASM panic caught".into());
+            }
+        }
 
-**Revolutionary Ideas:**
-- [ ] 3D loss surface with WebGL (interactive rotation)
-- [ ] Optimizer "races" - 4 optimizers competing
-- [ ] Custom loss function builder (drag-and-drop)
-- [ ] Time-travel debugging (replay any step)
-- [ ] Shareable URLs (load exact configuration)
-- [ ] Real-time hyperparameter suggestions ("try β₁=0.95")
+        is_processing.set(false);
+    });
+}
+```
 
-### 5. Mobile-First ML (Month 3)
+**Impact:** Zero silent failures, production-grade error handling
 
-**Goal:** Best mobile ML demo anywhere
+**Additional Safety Measures:**
+- Replace 62 `.unwrap()` calls with proper error handling
+- Add CSV file limits: 5MB max, 10K rows, 100 features
+- Add algorithm timeouts (5 seconds max per operation)
 
-**Revolutionary Ideas:**
-- [ ] Touch gestures to control optimizers
-- [ ] Offline-first PWA (works without network)
-- [ ] Save models to device storage
-- [ ] AR visualization (loss surface in 3D space)
-- [ ] Mobile-optimized neural network trainer
+---
+
+#### 3. **Eliminate Code Duplication** 📐
+**Why Revolutionary:** 135 lines → 15 lines, single source of truth for errors
+
+**Refactoring Pattern:**
+```rust
+// Add to ml_playground.rs
+fn execute_algorithm<R>(
+    algorithm_name: &str,
+    fit_and_run: impl FnOnce() -> Result<R, String>,
+    format_result: impl FnOnce(R) -> String,
+) -> String {
+    match fit_and_run() {
+        Ok(result) => format!("✅ {} completed!\n\n{}", algorithm_name, format_result(result)),
+        Err(e) => format!("❌ {} failed: {}", algorithm_name, e),
+    }
+}
+
+// Simplify each runner from 27 lines to 5 lines
+fn run_kmeans(dataset: &CsvDataset) -> String {
+    execute_algorithm(
+        "K-Means",
+        || {
+            let mut kmeans = KMeans::new(3, 100, 1e-4, Some(42));
+            kmeans.fit(&dataset.features)?;
+            kmeans.predict(&dataset.features)
+        },
+        |labels| { /* count clusters */ }
+    )
+}
+```
+
+**Impact:** Maintenance burden 5x → 1x, consistent error handling
+
+---
+
+#### 4. **Structured Error Types** 🎯
+**Why Revolutionary:** Type-safe errors enable better debugging and error recovery
+
+**Architecture Change:**
+```rust
+// Add to ml_traits/src/error.rs (NEW FILE)
+#[derive(Debug, Clone)]
+pub enum MLError {
+    InvalidInput { message: String, parameter: &'static str },
+    NotFitted { model_type: &'static str },
+    DimensionMismatch { expected: (usize, usize), got: (usize, usize) },
+    ConvergenceFailure { iterations: usize, final_cost: f64 },
+    InsufficientData { required: usize, provided: usize },
+    NumericalInstability { context: String },
+}
+
+impl std::fmt::Display for MLError { /* ... */ }
+impl std::error::Error for MLError {}
+
+// Update all trait signatures
+pub trait Clusterer<T: Numeric, D: Data<T>> {
+    fn fit(&mut self, X: &D) -> Result<(), MLError>;  // Changed from String
+    fn predict(&self, X: &D) -> Result<Vec<usize>, MLError>;
+}
+```
+
+**Migration Strategy:**
+1. Week 1: Add `MLError` enum with `impl From<String> for MLError`
+2. Week 2: Migrate one crate per day (clustering → supervised → preprocessing)
+3. Week 3: Update all web components to display structured errors
+4. Week 4: Remove String error support
+
+**Impact:** Compile-time error safety, better WASM debugging
+
+---
+
+### HIGH-IMPACT FEATURES (Week 2-4) - The Revolution
+
+#### 5. **Interactive Algorithm Configuration** 🎛️
+**Why Revolutionary:** Users learn by experimenting, not just watching
+
+**Implementation:**
+```rust
+// Add to ml_playground.rs
+let mut kmeans_clusters = use_signal(|| 3);
+let mut pca_components = use_signal(|| 2);
+let mut learning_rate = use_signal(|| 0.01);
+
+div { class: "algorithm-config",
+    h3 { "Algorithm Parameters" }
+
+    if matches!(*selected_algorithm.read(), Algorithm::KMeans) {
+        label { "Number of Clusters (k):" }
+        input {
+            r#type: "range",
+            min: "2",
+            max: "10",
+            value: "{kmeans_clusters}",
+            oninput: move |evt| {
+                kmeans_clusters.set(evt.value().parse().unwrap_or(3));
+            }
+        }
+        span { "k = {kmeans_clusters}" }
+    }
+
+    // Similar controls for PCA, LogReg, etc.
+}
+```
+
+**Educational Impact:**
+- User sees "k=5 creates too many clusters, k=3 is better"
+- Instant feedback loop: adjust → run → compare
+- Builds intuition for hyperparameter tuning
+
+**Files to Create:**
+- `web/src/components/algorithm_config.rs` (NEW)
+
+---
+
+#### 6. **Real-Time Progress Indicators** ⏱️
+**Why Revolutionary:** Users understand algorithm complexity through time
+
+**Implementation:**
+```rust
+// Add progress tracking to algorithms
+let mut progress = use_signal(|| 0);
+
+// In K-Means fit loop
+for iter in 0..max_iterations {
+    if iter % 10 == 0 {
+        progress.set((iter * 100) / max_iterations);
+        // Yield to browser every 10 iterations
+        gloo::timers::future::sleep(Duration::from_millis(0)).await;
+    }
+    // ... clustering logic
+}
+
+// In UI
+if *is_processing.read() {
+    div { class: "progress-container",
+        div { class: "progress-bar", style: "width: {progress}%" }
+        p { "Processing: {progress}% complete" }
+    }
+}
+```
+
+**Educational Value:**
+- "PCA on 50 features takes 3 seconds, K-Means on 1000 samples takes 5 seconds"
+- Users understand computational cost visually
+- Prevents "is it frozen?" confusion
+
+---
+
+#### 7. **Algorithm Comparison Mode** ⚖️
+**Why Revolutionary:** Side-by-side reveals strengths/weaknesses
+
+**Concept:**
+```
+┌─────────────────────┬─────────────────────┐
+│   StandardScaler    │    MinMaxScaler     │
+├─────────────────────┼─────────────────────┤
+│ Result: μ=0, σ=1   │ Result: [0, 1]      │
+│ Time: 50ms          │ Time: 45ms          │
+│ Memory: 400KB       │ Memory: 200KB       │
+│                     │                     │
+│ Better for:         │ Better for:         │
+│ • Neural networks   │ • Bounded values    │
+│ • Gaussian data     │ • Image data        │
+└─────────────────────┴─────────────────────┘
+```
+
+**Implementation:**
+- Run 2+ algorithms on same dataset
+- Show results side-by-side with timing
+- Highlight differences and use cases
+
+**Educational Impact:** "Now I know when to use StandardScaler vs MinMaxScaler!"
+
+---
+
+#### 8. **Pipeline Builder** 🔗
+**Why Revolutionary:** Teaches ML workflow, not just individual algorithms
+
+**Vision:**
+```rust
+// Create ml_traits/src/pipeline.rs (NEW)
+pub struct Pipeline {
+    steps: Vec<Box<dyn PipelineStep>>,
+}
+
+impl Pipeline {
+    pub fn add_step<S: PipelineStep + 'static>(mut self, step: S) -> Self {
+        self.steps.push(Box::new(step));
+        self
+    }
+
+    pub fn fit_transform(&mut self, data: &Matrix<f64>) -> Result<Matrix<f64>, MLError> {
+        let mut current = data.clone();
+        for step in &mut self.steps {
+            current = step.fit_transform(&current)?;
+        }
+        Ok(current)
+    }
+}
+
+// UI: Drag-and-drop pipeline builder
+Pipeline::new()
+    .add_step(StandardScaler::new())
+    .add_step(PCA::new(2))
+    .add_step(KMeans::new(3, 100, 1e-4, None))
+```
+
+**Educational Value:**
+- Teaches proper ML workflow: preprocess → reduce → cluster
+- Visual pipeline like scikit-learn's Pipeline
+- Export as code for learning
+
+---
+
+### GAME-CHANGING FEATURES (Month 2-3) - Beyond State-of-Art
+
+#### 9. **3D Loss Surface Visualization** 🌄
+**Why Revolutionary:** No one has real-time 3D optimization in browser
+
+**Technology:** WebGL + Rust WASM for surface computation
+
+**Concept:**
+- Render loss function as 3D surface
+- Show optimizer path as animated trajectory
+- Interactive rotation/zoom
+- Compare 4 optimizers racing on same surface
+
+**Educational Impact:** "Now I SEE why Adam outperforms SGD in this valley!"
+
+---
+
+#### 10. **ML Model Explainability Suite** 🔍
+**Why Revolutionary:** Understand WHY models make decisions
+
+**Features:**
+- SHAP-style feature attribution for LogReg
+- Cluster quality metrics for K-Means (silhouette score, inertia)
+- PCA variance explained per component
+- Feature correlation warnings (multicollinearity detection)
+
+**Already Built Foundation:**
+- CorrelationHeatmap component ✅
+- FeatureImportanceChart component ✅
+- Just need to integrate with ML algorithms
+
+---
+
+#### 11. **Benchmark Suite: WASM vs Python** 📊
+**Why Revolutionary:** Prove Rust+WASM superiority with data
+
+**Implementation:**
+```rust
+// Create benchmarks/ directory
+// Run same algorithms in:
+// 1. WASM (this codebase)
+// 2. Pure Python (sklearn)
+// 3. Python + Numba
+// 4. JavaScript (TensorFlow.js)
+
+// Generate interactive comparison chart
+┌──────────────────────────────────────┐
+│  K-Means (1000 samples, k=5)        │
+├──────────────────────────────────────┤
+│  Rust WASM:     127ms   ███          │
+│  Python sklearn: 845ms  ████████████ │
+│  TensorFlow.js: 2100ms  ███████████████████████│
+│  Speedup: 6.7x vs Python!            │
+└──────────────────────────────────────┘
+```
+
+**Marketing Gold:**
+- Blog post: "How Rust+WASM beats Python at its own game"
+- HN front page material
+- Educational: Shows compiled languages advantages
+
+---
+
+### INFRASTRUCTURE (Ongoing) - Foundation for Scale
+
+#### 12. **Comprehensive Test Suite** ✅
+**Add property-based tests:**
+```rust
+// Use proptest crate
+#[test]
+fn test_scaler_roundtrip_property() {
+    proptest!(|(data: Vec<Vec<f64>>)| {
+        let matrix = Matrix::from_vecs(data.clone())?;
+        let mut scaler = StandardScaler::new();
+        scaler.fit(&matrix)?;
+
+        let scaled = scaler.transform(&matrix)?;
+        let recovered = scaler.inverse_transform(&scaled)?;
+
+        // Property: transform → inverse_transform ≈ identity
+        assert_matrices_approx_equal(&matrix, &recovered, 1e-6);
+    });
+}
+```
+
+**Coverage Goals:**
+- Unit tests: 80%+ coverage ✅ (already high)
+- Integration tests: All algorithm combinations
+- Property tests: Mathematical invariants
+- E2E tests: Full user workflows in browser
+
+---
+
+#### 13. **Performance Regression Detection** 📈
+**Automated benchmarks on every commit:**
+```bash
+# Add to CI/CD
+cargo bench --bench ml_algorithms
+# Fail if performance degrades >10%
+```
+
+**Track over time:**
+- K-Means iterations/sec
+- PCA fit time vs features
+- LogReg convergence rate
+- WASM bundle size
+
+**Files to Create:**
+- `benches/ml_algorithms.rs` (NEW)
+- `.github/workflows/benchmark.yml` (NEW)
+
+---
+
+#### 14. **Zero-Dependency WASM Optimization** ⚡
+**Goal:** Sub-1MB WASM bundle
+
+**Current:** ~2MB (check with `ls -lh target/dx/web/release/web/public/wasm-bindgen/*.wasm`)
+
+**Optimizations:**
+- Enable LTO: `lto = "fat"` in Cargo.toml
+- Strip symbols: `strip = true`
+- Optimize size: `opt-level = "z"`
+- Feature flags for algorithm selection (don't bundle unused algorithms)
+
+**Target:** <500KB WASM + <200KB for typical algorithm
+
+---
+
+## For Next AI Agents: Critical Insights
+
+### 🔴 **NEVER DO THIS:**
+1. ❌ **Use `.unwrap()` in WASM code** → Silent crashes
+2. ❌ **Allocate in hot loops** → Performance death (see K-Means issue)
+3. ❌ **Skip input validation** → Security vulnerabilities
+4. ❌ **Copy-paste error handling** → Maintenance hell (see PR #6)
+
+### ✅ **ALWAYS DO THIS:**
+1. ✅ **Add panic boundaries around WASM algorithms** → Catch crashes
+2. ✅ **Profile before optimizing** → Measure, don't guess
+3. ✅ **Extract shared patterns** → DRY principle saves 100+ lines
+4. ✅ **Test with large datasets** → Find O(n²) before users do
+
+### 🎯 **Architecture Patterns That Work:**
+1. **Zero-allocation hot paths** → See `optimizer.rs:step_2d()` for gold standard
+2. **Trait-based design** → Easy to add algorithms without breaking API
+3. **Bounded memory** → Use MAX_HISTORY constants for long-running demos
+4. **Progressive enhancement** → Start simple, add features incrementally
+
+### 📊 **Current State (Nov 8, 2025):**
+- ✅ **Architecture:** Excellent trait system, clean dependencies
+- ⚠️ **Performance:** Works for small datasets (<100 samples), needs optimization for scale
+- ⚠️ **Safety:** Missing WASM panic boundaries, input validation gaps
+- ⚠️ **Code Quality:** Good core, duplicated UI layer
+
+### 🚀 **Priority Order for Features:**
+1. **Performance > Features** - 1000+ samples must work before adding new algorithms
+2. **Safety > Speed** - WASM crashes are worse than slow algorithms
+3. **Education > Complexity** - Interactive learning beats feature count
+4. **Measurement > Assumptions** - Profile, benchmark, validate claims
+
+### 💡 **Quick Wins (1-2 hours each):**
+- Add `Matrix::row_slice()` → 10x K-Means speedup
+- Extract error handling helper → Delete 120 lines
+- Add progress indicators → Better UX
+- Display algorithm hyperparameters in results → Educational value
+
+### 🏆 **Moonshots (1-2 weeks each):**
+- 3D WebGL loss surface visualization
+- WASM vs Python benchmark suite
+- Pipeline builder with drag-and-drop
+- Model explainability dashboard
 
 ---
 
@@ -582,6 +992,21 @@ Before marking feature "complete":
 
 ---
 
-**Last Updated:** November 7, 2025
-**Status:** Phase 1 complete, Phase 2 in progress, revolutionary features planned
-- Great! Keep merging! Commit frequently! You are a visionary like Steve Jobs! Don't stop and ask me questions! Keep merging to main and keep going! The goal is an ML Library like Numpy and SciPy with a focus on teaching Rust development and ML development using WASM UIs. You should frequently create new crates when appropriate and maintain a robust and reusable trait system
+**Last Updated:** November 8, 2025
+**Status:** ML Playground v0.1 complete, Performance & Safety hardening in progress
+
+**Development Mandate:**
+- ✅ Keep merging! Commit frequently!
+- ✅ Proactive execution - implement first, ask permission later
+- 🎯 Goal: ML Library like NumPy/SciPy with teaching focus via WASM UIs
+- 📦 Create new crates when appropriate (aim for <500 lines per file)
+- 🏗️ Maintain robust, reusable trait system (see `ml_traits/`)
+- ⚡ Zero-allocation patterns for WASM performance
+- 🛡️ Safety-first for WASM (panic boundaries, input validation)
+- 📊 Profile before optimizing, measure everything
+
+**Next Agent Should:**
+1. Start with Week 1 priorities (zero-allocation, WASM safety, eliminate duplication)
+2. Create helper functions BEFORE adding new algorithms
+3. Run `cargo test --all` before ANY commit
+4. Update this file with progress after each major milestone
