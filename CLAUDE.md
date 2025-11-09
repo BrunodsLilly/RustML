@@ -11,6 +11,8 @@ This project is building a **client-side ML platform** that showcases what's pos
 **Current Milestone:** Interactive Algorithm Studio with real-time parameter configuration and performance tracking.
 
 **Latest Achievements:**
+- ✅ **Nov 9, 2025:** Decision Tree & Naive Bayes integration complete - 7 algorithms now available
+- ✅ **Nov 9, 2025:** 18 E2E tests passing across 3 browsers (Chromium, Firefox, WebKit)
 - ✅ **Nov 8, 2025:** PR #6 merged - ML Playground with 5 algorithms (K-Means, PCA, LogReg, Scalers)
 - ✅ **Nov 8, 2025:** Phase 2 complete - AlgorithmConfigurator & ModelPerformanceCard components
 - 🔍 **Nov 8, 2025:** Comprehensive multi-agent code review completed (6 specialized reviewers)
@@ -28,12 +30,18 @@ Core ML Libraries:
 ├─ linear_algebra/       - Matrix & vector ops (foundation for everything)
 │  ├─ matrix.rs          - Row-major matrices with operations
 │  ├─ vectors.rs         - Vector arithmetic
-│  └─ statistics.rs      - ⭐ NEW: Correlation, standardization, variance
+│  └─ statistics.rs      - Correlation, standardization, variance
 ├─ neural_network/       - Multi-layer perceptron with backpropagation
 │  └─ optimizer.rs       - SGD, Momentum, RMSprop, Adam (with zero-allocation 2D path)
 ├─ linear_regression/    - Gradient descent implementation
-├─ loader/              - Data I/O utilities (CSV parsing, dataset management)
-└─ datasets/            - Dataset storage
+├─ clustering/          - Unsupervised learning (K-Means)
+├─ decision_tree/       - ⭐ NEW: CART classifier with Gini impurity
+├─ supervised/          - ⭐ NEW: Logistic Regression & Gaussian Naive Bayes
+├─ dimensionality_reduction/ - PCA for feature reduction
+├─ preprocessing/       - StandardScaler, MinMaxScaler
+├─ ml_traits/          - Shared traits (Clusterer, SupervisedModel, Transformer)
+├─ loader/             - Data I/O utilities (CSV parsing, dataset management)
+└─ datasets/           - Dataset storage
 
 Applications:
 ├─ web/                 - Dioxus WASM app (THE SHOWCASE)
@@ -87,25 +95,41 @@ dx serve --platform desktop            # Native desktop app
 - `/` - Landing page
 - `/showcase` - Matrix operations & gradient descent trainer
 - `/optimizer` - Interactive 4-optimizer comparison
-- `/playground` - ✅ **NEW:** ML Playground with 5 algorithms (K-Means, PCA, LogReg, Scalers)
+- `/playground` - ✅ ML Playground with 7 algorithms (K-Means, PCA, LogReg, DecisionTree, NaiveBayes, Scalers)
 
 ### Testing
 
 ```bash
-# Run all tests
+# Run all Rust unit tests
 cargo test
 
 # Test specific packages
 cargo test -p neural_network          # 42 tests (optimizer tests critical)
 cargo test -p linear_algebra          # Matrix/vector tests
 cargo test -p linear_regression       # Gradient descent tests
+cargo test -p decision_tree           # Decision tree tests
+cargo test -p supervised              # Logistic regression, Naive Bayes tests
 
 # Test with output
 cargo test -- --nocapture
 
 # Single test
 cargo test -p neural_network test_adam_bias_correction
+
+# E2E tests with Playwright (requires dev server running)
+cd web
+dx serve &  # Start dev server in background
+npx playwright test                                    # All E2E tests
+npx playwright test decision-tree-naive-bayes.spec.js  # Specific test file
+npx playwright test --headed                           # See browser
+npx playwright test --project=chromium                 # Single browser
 ```
+
+**E2E Test Structure:**
+- Tests live in `web/tests/*.spec.js`
+- Run across 3 browsers: Chromium, Firefox, WebKit
+- Test full user workflows: CSV upload → algorithm selection → parameter config → run → results
+- Current coverage: 18 tests (6 scenarios × 3 browsers)
 
 ### Examples
 
@@ -244,6 +268,54 @@ let (new_x, new_y) = optimizer.step_2d((x, y), (dx, dy));
 - Multi-optimizer race mode
 - Custom loss function definition
 - Shareable URLs with configurations
+
+### ⭐ NEW: Decision Tree & Naive Bayes (✅ COMPLETE - Nov 9, 2025)
+
+**Revolutionary Classification Suite:**
+
+**Algorithms Integrated:**
+1. **Decision Tree (CART)** - Tree-based classifier with Gini impurity
+   - Configurable parameters: max_depth (1-50), min_samples_split (2-100), min_samples_leaf (1-50)
+   - Results show: accuracy, tree depth, predictions count, class distribution
+   - Icon: 🌳
+
+2. **Naive Bayes (Gaussian)** - Probabilistic classifier with independence assumption
+   - No configurable parameters (uses epsilon=1e-9 for numerical stability)
+   - Results show: accuracy, model type, class distribution, statistical assumptions
+   - Icon: 🎯
+
+**Technical Implementation:**
+- Added `decision_tree` crate dependency to `web/Cargo.toml`
+- Extended `Algorithm` enum in `ml_playground.rs` (lines 479-486)
+- Extended `AlgorithmParams` struct with dt_* fields (lines 522-525)
+- Created `run_decision_tree()` and `run_naive_bayes()` functions (lines 1030-1113)
+- Added parameter configurations in `algorithm_configurator.rs` (lines 306-356)
+- Added algorithm explanations in `AlgorithmExplanation` component (lines 656-689)
+
+**Testing:**
+- 18 E2E tests passing across 3 browsers (Chromium, Firefox, WebKit)
+- Test file: `web/tests/decision-tree-naive-bayes.spec.js` (249 lines)
+- Coverage: button visibility, full workflows, parameter configuration, cross-browser validation
+
+**Key Pattern for Adding New Algorithms:**
+1. Add to `Algorithm` enum in `ml_playground.rs`
+2. Add to `AlgorithmType` enum in `algorithm_configurator.rs`
+3. Add parameter configurations (if needed)
+4. Implement `run_algorithm()` function following the execute_algorithm pattern
+5. Add UI button with icon and description
+6. Add algorithm explanation in `AlgorithmExplanation` component
+7. Write comprehensive E2E tests
+
+**Files Modified:**
+- `web/Cargo.toml` - Added decision_tree dependency
+- `web/src/components/ml_playground.rs` - ~230 lines added
+- `web/src/components/shared/algorithm_configurator.rs` - ~80 lines added
+- `web/tests/decision-tree-naive-bayes.spec.js` - 249 lines (NEW)
+
+**Documentation:**
+- Complete session summary: `docs/OVERNIGHT_DEV_SESSION_2025-11-09.md`
+
+---
 
 ### Code Review Status
 
@@ -858,9 +930,10 @@ cargo bench --bench ml_algorithms
 3. **Bounded memory** → Use MAX_HISTORY constants for long-running demos
 4. **Progressive enhancement** → Start simple, add features incrementally
 
-### 📊 **Current State (Nov 8, 2025 - Post Phase 2):**
+### 📊 **Current State (Nov 9, 2025 - Post Decision Tree & Naive Bayes):**
 - ✅ **Phase 1 Complete:** Data Explorer (CSV upload, SummaryStats, DataQuality, DataTable, FeatureSelector)
 - ✅ **Phase 2 Complete:** Interactive Algorithm Studio (AlgorithmConfigurator, ModelPerformanceCard)
+- ✅ **Nov 9, 2025:** Decision Tree & Naive Bayes integration - 7 algorithms live, 18 E2E tests passing
 - ✅ **Architecture:** 7.5/10 - Excellent trait system, clean dependencies
 - ⚠️ **Performance:** 6.0/10 - Works for small datasets (<100 samples), needs optimization for scale (11 P1 bottlenecks)
 - 🚨 **Safety:** 4.0/10 - Missing WASM panic boundaries (136 unwrap() calls, no input validation)
@@ -1047,12 +1120,13 @@ Before marking feature "complete":
 
 ---
 
-**Last Updated:** November 8, 2025 (Post Phase 2 Multi-Agent Review)
-**Status:** Interactive Algorithm Studio v0.2 complete, Critical bug fixes & Performance hardening needed
+**Last Updated:** November 9, 2025 (Post Decision Tree & Naive Bayes Integration)
+**Status:** ML Playground v0.3 - 7 Algorithms Live, Production-Ready Test Coverage
 
 **Development Milestones:**
 - ✅ Phase 1: Data Explorer (CSV upload + 5 analysis components)
 - ✅ Phase 2: Interactive Algorithm Studio (AlgorithmConfigurator + ModelPerformanceCard)
+- ✅ **Nov 9, 2025:** Decision Tree & Naive Bayes integration (2 new algorithms, 18 E2E tests, 3 browsers)
 - 🔍 Comprehensive 6-agent code review completed (41 findings documented)
 - ⏭️ Next: Week 1 Critical Fixes (parameter bug, zero-allocation, WASM safety)
 

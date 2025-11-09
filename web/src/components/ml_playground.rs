@@ -3,6 +3,8 @@
 //! This component provides a comprehensive interface for testing all ML algorithms
 //! with user-uploaded CSV data.
 
+use std::collections::HashMap;
+
 use clustering::kmeans::KMeans;
 use decision_tree::{DecisionTreeClassifier, SplitCriterion};
 use dimensionality_reduction::pca::PCA;
@@ -17,8 +19,9 @@ use supervised::logistic_regression::LogisticRegression;
 use supervised::naive_bayes::GaussianNB;
 
 use crate::components::shared::{
-    AlgorithmCategory, AlgorithmConfigurator, AlgorithmParameter, AlgorithmType,
-    ModelPerformanceCard, PerformanceMetrics, TrainingStatus,
+    AlgorithmCategory, AlgorithmConfigurator, AlgorithmParameter, AlgorithmResults, AlgorithmType,
+    MetricValue, ModelPerformanceCard, PerformanceMetrics, ResultsDisplay, TrainingStatus,
+    Visualization,
 };
 
 /// ML Playground component
@@ -42,6 +45,10 @@ pub fn MLPlayground() -> Element {
     let mut train_split_pct = use_signal(|| 80); // Default 80% train, 20% test
     let mut show_predictions = use_signal(|| false);
     let mut predictions_data = use_signal(|| None::<PredictionsData>);
+
+    // State for algorithm results display
+    let mut algorithm_results = use_signal(|| None::<AlgorithmResults>);
+    let mut show_results_display = use_signal(|| false);
 
     rsx! {
         div { class: "ml-playground",
@@ -300,22 +307,48 @@ pub fn MLPlayground() -> Element {
                                         performance_metrics.set(Some(PerformanceMetrics::new(max_iter)));
 
                                         if let Some(ref dataset) = *csv_dataset.read() {
-                                            // WASM panic boundary: catch crashes gracefully
-                                            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                                run_algorithm_with_metrics(
-                                                    *selected_algorithm.read(),
-                                                    dataset,
-                                                    &algorithm_params.read(),
-                                                    &mut performance_metrics,
-                                                    *train_split_pct.read() as usize,
-                                                    &mut predictions_data,
-                                                    &mut show_predictions
-                                                )
-                                            }));
+                                            // Special handling for Naive Bayes with new results display
+                                            if matches!(*selected_algorithm.read(), Algorithm::NaiveBayes) {
+                                                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                                    run_naive_bayes(dataset, &algorithm_params.read())
+                                                }));
 
-                                            match result {
-                                                Ok(msg) => result_message.set(msg),
-                                                Err(panic_info) => {
+                                                match result {
+                                                    Ok(Ok(results)) => {
+                                                        algorithm_results.set(Some(results));
+                                                        show_results_display.set(true);
+                                                        show_performance.set(false);
+                                                        result_message.set(String::new());
+                                                    }
+                                                    Ok(Err(e)) => {
+                                                        result_message.set(format!("❌ Naive Bayes failed: {}", e));
+                                                    }
+                                                    Err(panic_info) => {
+                                                        web_sys::console::error_1(&"❌ WASM panic caught during Naive Bayes execution".into());
+                                                        web_sys::console::error_1(&format!("{:?}", panic_info).into());
+                                                        result_message.set(format!(
+                                                            "❌ Naive Bayes crashed unexpectedly.\n\n\
+                                                            Check browser console for details."
+                                                        ));
+                                                    }
+                                                }
+                                            } else {
+                                                // Standard handling for other algorithms
+                                                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                                    run_algorithm_with_metrics(
+                                                        *selected_algorithm.read(),
+                                                        dataset,
+                                                        &algorithm_params.read(),
+                                                        &mut performance_metrics,
+                                                        *train_split_pct.read() as usize,
+                                                        &mut predictions_data,
+                                                        &mut show_predictions
+                                                    )
+                                                }));
+
+                                                match result {
+                                                    Ok(msg) => result_message.set(msg),
+                                                    Err(panic_info) => {
                                                     // Log panic details for debugging
                                                     web_sys::console::error_1(&"❌ WASM panic caught during algorithm execution".into());
                                                     web_sys::console::error_1(&format!("{:?}", panic_info).into());
@@ -335,6 +368,7 @@ pub fn MLPlayground() -> Element {
                                                 }
                                             }
                                         }
+                                        }  // Close if let Some(ref dataset)
 
                                         is_processing.set(false);
                                     });
@@ -436,6 +470,15 @@ pub fn MLPlayground() -> Element {
                             }
                         } else {
                             rsx! { div {} }
+                        }
+                    }
+
+                    // New Results Display for Naive Bayes
+                    if *show_results_display.read() {
+                        if let Some(results) = algorithm_results.read().clone() {
+                            ResultsDisplay {
+                                results: Signal::new(results)
+                            }
                         }
                     }
 
@@ -884,7 +927,18 @@ fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset, params: &AlgorithmP
         Algorithm::PCA => run_pca(dataset, params),
         Algorithm::LogisticRegression => run_logistic_regression(dataset, params),
         Algorithm::DecisionTree => run_decision_tree(dataset, params),
-        Algorithm::NaiveBayes => run_naive_bayes(dataset, params),
+        Algorithm::NaiveBayes => {
+            // NaiveBayes returns AlgorithmResults, convert to String for backward compatibility
+            match run_naive_bayes(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nAccuracy: {:.1}%\nPredictions: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.accuracy.unwrap_or(0.0),
+                    results.predictions.len()
+                ),
+                Err(e) => format!("❌ Naive Bayes failed: {}", e),
+            }
+        }
         Algorithm::StandardScaler => run_standard_scaler(dataset, params),
         Algorithm::MinMaxScaler => run_minmax_scaler(dataset, params),
     }
@@ -1074,43 +1128,68 @@ fn run_decision_tree(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
     }
 }
 
-fn run_naive_bayes(dataset: &CsvDataset, _params: &AlgorithmParams) -> String {
+fn run_naive_bayes(
+    dataset: &CsvDataset,
+    _params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
     let mut nb = GaussianNB::new();
 
-    match nb.fit(&dataset.features, &dataset.targets) {
-        Ok(_) => match nb.predict(&dataset.features) {
-            Ok(predictions) => {
-                // Calculate accuracy
-                let correct = predictions
-                    .iter()
-                    .zip(dataset.targets.iter())
-                    .filter(|(&pred, &actual)| pred == actual as usize)
-                    .count();
-                let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+    nb.fit(&dataset.features, &dataset.targets)?;
+    let predictions = nb.predict(&dataset.features)?;
 
-                // Count classes
-                let mut classes = std::collections::HashSet::new();
-                for &target in &dataset.targets {
-                    classes.insert(target as usize);
-                }
+    // Calculate accuracy
+    let correct = predictions
+        .iter()
+        .zip(dataset.targets.iter())
+        .filter(|(&pred, &actual)| pred == actual as usize)
+        .count();
+    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
 
-                format!(
-                    "✅ Naive Bayes completed!\n\n\
-                    📊 Accuracy: {:.1}%\n\
-                    🎲 Model: Gaussian Naive Bayes\n\
-                    📈 Predictions: {}\n\
-                    🎯 Classes: {}\n\
-                    📐 Assumption: Features are independent\n\
-                    📊 Distribution: Gaussian (Normal)",
-                    accuracy,
-                    predictions.len(),
-                    classes.len()
-                )
-            }
-            Err(e) => format!("❌ Prediction failed: {}", e),
-        },
-        Err(e) => format!("❌ Naive Bayes failed: {}", e),
+    // Count classes
+    let mut classes = std::collections::HashSet::new();
+    for &target in &dataset.targets {
+        classes.insert(target as usize);
     }
+
+    // Create confusion matrix
+    let class_labels: Vec<String> = classes.iter().map(|c| c.to_string()).collect();
+    let n_classes = classes.len();
+    let mut confusion_matrix = vec![vec![0; n_classes]; n_classes];
+
+    for (&pred, &actual) in predictions.iter().zip(dataset.targets.iter()) {
+        let actual_idx = actual as usize;
+        confusion_matrix[actual_idx][pred] += 1;
+    }
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Classes".to_string(), MetricValue::Integer(n_classes));
+    metrics.insert(
+        "Samples".to_string(),
+        MetricValue::Integer(predictions.len()),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Model Type".to_string(), "Gaussian Naive Bayes".to_string());
+    model_details.insert("Distribution".to_string(), "Gaussian (Normal)".to_string());
+    model_details.insert(
+        "Assumption".to_string(),
+        "Features are independent".to_string(),
+    );
+
+    Ok(AlgorithmResults {
+        algorithm_name: "Naive Bayes".to_string(),
+        accuracy: Some(accuracy),
+        predictions,
+        actual_values: Some(dataset.targets.clone()),
+        metrics,
+        visualizations: vec![Visualization::ConfusionMatrix {
+            matrix: confusion_matrix,
+            class_labels,
+        }],
+        model_details,
+    })
 }
 
 // Algorithm runners with metrics tracking
