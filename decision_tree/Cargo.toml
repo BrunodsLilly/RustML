@@ -1,0 +1,18 @@
+[package]
+name = "decision_tree"
+version = "0.1.0"
+edition = "2021"
+authors = ["Bruno <bruno@example.com>"]
+description = "Decision Tree Classifier and Regressor for ML"
+
+[dependencies]
+linear_algebra = { path = "../linear_algebra" }
+ml_traits = { path = "../ml_traits" }
+serde = { version = "1.0", features = ["derive"], optional = true }
+
+[dev-dependencies]
+approx = "0.5"
+
+[features]
+default = []
+serialization = ["serde"]
