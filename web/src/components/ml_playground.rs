@@ -311,7 +311,7 @@ pub fn MLPlayground() -> Element {
                                             let current_algo = *selected_algorithm.read();
                                             if matches!(
                                                 current_algo,
-                                                Algorithm::NaiveBayes | Algorithm::DecisionTree | Algorithm::KMeans | Algorithm::PCA | Algorithm::LogisticRegression
+                                                Algorithm::NaiveBayes | Algorithm::DecisionTree | Algorithm::KMeans | Algorithm::PCA | Algorithm::LogisticRegression | Algorithm::StandardScaler | Algorithm::MinMaxScaler
                                             ) {
                                                 let algo_name = current_algo.name().to_string();
                                                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -331,7 +331,12 @@ pub fn MLPlayground() -> Element {
                                                         Algorithm::LogisticRegression => {
                                                             run_logistic_regression(dataset, &algorithm_params.read())
                                                         }
-                                                        _ => unreachable!(),
+                                                        Algorithm::StandardScaler => {
+                                                            run_standard_scaler(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::MinMaxScaler => {
+                                                            run_minmax_scaler(dataset, &algorithm_params.read())
+                                                        }
                                                     }
                                                 }));
 
@@ -1009,8 +1014,32 @@ fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset, params: &AlgorithmP
                 Err(e) => format!("❌ Naive Bayes failed: {}", e),
             }
         }
-        Algorithm::StandardScaler => run_standard_scaler(dataset, params),
-        Algorithm::MinMaxScaler => run_minmax_scaler(dataset, params),
+        Algorithm::StandardScaler => {
+            // StandardScaler returns AlgorithmResults, convert to String for backward compatibility
+            match run_standard_scaler(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nFeatures: {}\nSamples: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.metrics.get("Features").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Samples").map(|v| v.display()).unwrap_or("?".to_string())
+                ),
+                Err(e) => format!("❌ Standard Scaler failed: {}", e),
+            }
+        }
+        Algorithm::MinMaxScaler => {
+            // MinMaxScaler returns AlgorithmResults, convert to String for backward compatibility
+            match run_minmax_scaler(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nFeatures: {}\nSamples: {}\nRange: {} to {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.metrics.get("Features").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Samples").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Min Value").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Max Value").map(|v| v.display()).unwrap_or("?".to_string())
+                ),
+                Err(e) => format!("❌ MinMax Scaler failed: {}", e),
+            }
+        }
     }
 }
 
@@ -1242,42 +1271,240 @@ fn run_logistic_regression(
     })
 }
 
-fn run_standard_scaler(dataset: &CsvDataset, _params: &AlgorithmParams) -> String {
+fn run_standard_scaler(
+    dataset: &CsvDataset,
+    _params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
     let mut scaler = StandardScaler::new();
 
-    match scaler.fit(&dataset.features) {
-        Ok(_) => match scaler.transform(&dataset.features) {
-            Ok(scaled) => {
-                format!(
-                        "✅ StandardScaler completed!\n\nScaled {} features to μ=0, σ=1\nTransformed {} samples",
-                        dataset.features.cols,
-                        scaled.len()
-                    )
-            }
-            Err(e) => format!("❌ Transform failed: {}", e),
-        },
-        Err(e) => format!("❌ StandardScaler failed: {}", e),
+    // Get dimensions
+    let (n_samples, n_features) = dataset.features.shape();
+
+    // Calculate before statistics
+    let mut before_mean = vec![0.0; n_features];
+    let mut before_std = vec![0.0; n_features];
+
+    for j in 0..n_features {
+        let mut sum = 0.0;
+        for i in 0..n_samples {
+            sum += dataset.features.get(i, j).unwrap();
+        }
+        before_mean[j] = sum / n_samples as f64;
     }
+
+    for j in 0..n_features {
+        let mut sum_sq = 0.0;
+        for i in 0..n_samples {
+            let diff = dataset.features.get(i, j).unwrap() - before_mean[j];
+            sum_sq += diff * diff;
+        }
+        before_std[j] = (sum_sq / n_samples as f64).sqrt();
+    }
+
+    scaler.fit(&dataset.features)?;
+    let scaled = scaler.transform(&dataset.features)?;
+
+    // Calculate after statistics (scaled is Vec<Vec<f64>>)
+    let mut after_mean = vec![0.0; n_features];
+    let mut after_std = vec![0.0; n_features];
+
+    for j in 0..n_features {
+        let mut sum = 0.0;
+        for i in 0..n_samples {
+            sum += scaled[i][j];
+        }
+        after_mean[j] = sum / n_samples as f64;
+    }
+
+    for j in 0..n_features {
+        let mut sum_sq = 0.0;
+        for i in 0..n_samples {
+            let diff = scaled[i][j] - after_mean[j];
+            sum_sq += diff * diff;
+        }
+        after_std[j] = (sum_sq / n_samples as f64).sqrt();
+    }
+
+    // Build feature names
+    let feature_names: Vec<String> = (0..n_features)
+        .map(|i| format!("Feature {}", i + 1))
+        .collect();
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Features".to_string(), MetricValue::Integer(n_features));
+    metrics.insert("Samples".to_string(), MetricValue::Integer(n_samples));
+    metrics.insert(
+        "Mean After".to_string(),
+        MetricValue::Numeric(after_mean.iter().sum::<f64>() / n_features as f64),
+    );
+    metrics.insert(
+        "Std After".to_string(),
+        MetricValue::Numeric(after_std.iter().sum::<f64>() / n_features as f64),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Scaler Type".to_string(), "Standard Scaler".to_string());
+    model_details.insert(
+        "Normalization".to_string(),
+        "μ=0, σ=1 (z-score normalization)".to_string(),
+    );
+    model_details.insert(
+        "Method".to_string(),
+        "Subtracts mean and divides by standard deviation".to_string(),
+    );
+
+    // Dummy predictions (feature index with highest absolute scaled value)
+    let predictions: Vec<usize> = (0..n_samples)
+        .map(|i| {
+            (0..n_features)
+                .max_by(|&a, &b| {
+                    let val_a = scaled[i][a].abs();
+                    let val_b = scaled[i][b].abs();
+                    val_a
+                        .partial_cmp(&val_b)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .unwrap_or(0)
+        })
+        .collect();
+
+    Ok(AlgorithmResults {
+        algorithm_name: "Standard Scaler".to_string(),
+        accuracy: None,
+        predictions,
+        actual_values: None,
+        metrics,
+        visualizations: vec![Visualization::ScalerStats {
+            before_mean,
+            before_std,
+            after_mean,
+            after_std,
+            feature_names,
+        }],
+        model_details,
+    })
 }
 
-fn run_minmax_scaler(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+fn run_minmax_scaler(
+    dataset: &CsvDataset,
+    params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
     let mut scaler = MinMaxScaler::new(params.scaler_min, params.scaler_max);
 
-    match scaler.fit(&dataset.features) {
-        Ok(_) => match scaler.transform(&dataset.features) {
-            Ok(scaled) => {
-                format!(
-                        "✅ MinMaxScaler completed!\n\nScaled {} features to [{}, {}]\nTransformed {} samples",
-                        dataset.features.cols,
-                        params.scaler_min,
-                        params.scaler_max,
-                        scaled.len()
-                    )
-            }
-            Err(e) => format!("❌ Transform failed: {}", e),
-        },
-        Err(e) => format!("❌ MinMaxScaler failed: {}", e),
+    // Get dimensions
+    let (n_samples, n_features) = dataset.features.shape();
+
+    // Calculate before statistics
+    let mut before_mean = vec![0.0; n_features];
+    let mut before_std = vec![0.0; n_features];
+
+    for j in 0..n_features {
+        let mut sum = 0.0;
+        for i in 0..n_samples {
+            sum += dataset.features.get(i, j).unwrap();
+        }
+        before_mean[j] = sum / n_samples as f64;
     }
+
+    for j in 0..n_features {
+        let mut sum_sq = 0.0;
+        for i in 0..n_samples {
+            let diff = dataset.features.get(i, j).unwrap() - before_mean[j];
+            sum_sq += diff * diff;
+        }
+        before_std[j] = (sum_sq / n_samples as f64).sqrt();
+    }
+
+    scaler.fit(&dataset.features)?;
+    let scaled = scaler.transform(&dataset.features)?;
+
+    // Calculate after statistics (scaled is Vec<Vec<f64>>)
+    let mut after_mean = vec![0.0; n_features];
+    let mut after_std = vec![0.0; n_features];
+
+    for j in 0..n_features {
+        let mut sum = 0.0;
+        for i in 0..n_samples {
+            sum += scaled[i][j];
+        }
+        after_mean[j] = sum / n_samples as f64;
+    }
+
+    for j in 0..n_features {
+        let mut sum_sq = 0.0;
+        for i in 0..n_samples {
+            let diff = scaled[i][j] - after_mean[j];
+            sum_sq += diff * diff;
+        }
+        after_std[j] = (sum_sq / n_samples as f64).sqrt();
+    }
+
+    // Build feature names
+    let feature_names: Vec<String> = (0..n_features)
+        .map(|i| format!("Feature {}", i + 1))
+        .collect();
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Features".to_string(), MetricValue::Integer(n_features));
+    metrics.insert("Samples".to_string(), MetricValue::Integer(n_samples));
+    metrics.insert(
+        "Min Value".to_string(),
+        MetricValue::Numeric(params.scaler_min),
+    );
+    metrics.insert(
+        "Max Value".to_string(),
+        MetricValue::Numeric(params.scaler_max),
+    );
+    metrics.insert(
+        "Mean After".to_string(),
+        MetricValue::Numeric(after_mean.iter().sum::<f64>() / n_features as f64),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Scaler Type".to_string(), "MinMax Scaler".to_string());
+    model_details.insert(
+        "Range".to_string(),
+        format!("[{}, {}]", params.scaler_min, params.scaler_max),
+    );
+    model_details.insert(
+        "Method".to_string(),
+        "Scales features to specified min/max range".to_string(),
+    );
+
+    // Dummy predictions (feature index with highest scaled value)
+    let predictions: Vec<usize> = (0..n_samples)
+        .map(|i| {
+            (0..n_features)
+                .max_by(|&a, &b| {
+                    let val_a = scaled[i][a];
+                    let val_b = scaled[i][b];
+                    val_a
+                        .partial_cmp(&val_b)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .unwrap_or(0)
+        })
+        .collect();
+
+    Ok(AlgorithmResults {
+        algorithm_name: "MinMax Scaler".to_string(),
+        accuracy: None,
+        predictions,
+        actual_values: None,
+        metrics,
+        visualizations: vec![Visualization::ScalerStats {
+            before_mean,
+            before_std,
+            after_mean,
+            after_std,
+            feature_names,
+        }],
+        model_details,
+    })
 }
 
 fn run_decision_tree(
