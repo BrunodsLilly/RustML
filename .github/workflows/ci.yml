@@ -137,7 +137,7 @@ jobs:
         run: |
           cd web
           npm ci
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps
 
       - name: Start dev server in background
         run: |
