@@ -14,7 +14,7 @@ const path = require('path');
 test.describe('CSV Upload Feature', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the showcase page
-    await page.goto('http://localhost:8081/showcase');
+    await page.goto('http://localhost:8080/showcase');
 
     // Wait for page to be fully loaded
     await page.waitForLoadState('networkidle');

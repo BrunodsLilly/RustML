@@ -30,7 +30,7 @@ function createTestCSV(filename, content) {
 test.describe('Linear Regression Visualizer', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the showcase page
-    await page.goto('http://localhost:8081/showcase');
+    await page.goto('http://localhost:8080/showcase');
     await page.waitForLoadState('networkidle');
 
     // Scroll to gradient descent section
