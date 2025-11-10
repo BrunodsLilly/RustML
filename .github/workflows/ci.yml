@@ -160,6 +160,7 @@ jobs:
           exit 1
 
       - name: Run Playwright tests
+        timeout-minutes: 30
         run: |
           cd web
           npx playwright test
