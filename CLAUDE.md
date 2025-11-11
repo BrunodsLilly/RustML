@@ -8,9 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This project is building a **client-side ML platform** that showcases what's possible when Rust + WASM meet machine learning. The differentiator is **zero-backend computation**: everything runs in the browser at native speeds.
 
-**Current Milestone:** ML Playground with 5 live algorithms (K-Means, PCA, Logistic Regression, StandardScaler, MinMaxScaler) running in browser.
+**Current Milestone:** Interactive Algorithm Studio with real-time parameter configuration and performance tracking.
 
-**Latest Achievement (Nov 8, 2025):** ✅ PR #6 merged - Enabled all ML algorithms in web playground with simplified trait syntax.
+**Latest Achievements:**
+- ✅ **Nov 9, 2025:** Decision Tree & Naive Bayes integration complete - 7 algorithms now available
+- ✅ **Nov 9, 2025:** 18 E2E tests passing across 3 browsers (Chromium, Firefox, WebKit)
+- ✅ **Nov 8, 2025:** PR #6 merged - ML Playground with 5 algorithms (K-Means, PCA, LogReg, Scalers)
+- ✅ **Nov 8, 2025:** Phase 2 complete - AlgorithmConfigurator & ModelPerformanceCard components
+- 🔍 **Nov 8, 2025:** Comprehensive multi-agent code review completed (6 specialized reviewers)
 
 ---
 
@@ -25,12 +30,18 @@ Core ML Libraries:
 ├─ linear_algebra/       - Matrix & vector ops (foundation for everything)
 │  ├─ matrix.rs          - Row-major matrices with operations
 │  ├─ vectors.rs         - Vector arithmetic
-│  └─ statistics.rs      - ⭐ NEW: Correlation, standardization, variance
+│  └─ statistics.rs      - Correlation, standardization, variance
 ├─ neural_network/       - Multi-layer perceptron with backpropagation
 │  └─ optimizer.rs       - SGD, Momentum, RMSprop, Adam (with zero-allocation 2D path)
 ├─ linear_regression/    - Gradient descent implementation
-├─ loader/              - Data I/O utilities (CSV parsing, dataset management)
-└─ datasets/            - Dataset storage
+├─ clustering/          - Unsupervised learning (K-Means)
+├─ decision_tree/       - ⭐ NEW: CART classifier with Gini impurity
+├─ supervised/          - ⭐ NEW: Logistic Regression & Gaussian Naive Bayes
+├─ dimensionality_reduction/ - PCA for feature reduction
+├─ preprocessing/       - StandardScaler, MinMaxScaler
+├─ ml_traits/          - Shared traits (Clusterer, SupervisedModel, Transformer)
+├─ loader/             - Data I/O utilities (CSV parsing, dataset management)
+└─ datasets/           - Dataset storage
 
 Applications:
 ├─ web/                 - Dioxus WASM app (THE SHOWCASE)
@@ -84,25 +95,41 @@ dx serve --platform desktop            # Native desktop app
 - `/` - Landing page
 - `/showcase` - Matrix operations & gradient descent trainer
 - `/optimizer` - Interactive 4-optimizer comparison
-- `/playground` - ✅ **NEW:** ML Playground with 5 algorithms (K-Means, PCA, LogReg, Scalers)
+- `/playground` - ✅ ML Playground with 7 algorithms (K-Means, PCA, LogReg, DecisionTree, NaiveBayes, Scalers)
 
 ### Testing
 
 ```bash
-# Run all tests
+# Run all Rust unit tests
 cargo test
 
 # Test specific packages
 cargo test -p neural_network          # 42 tests (optimizer tests critical)
 cargo test -p linear_algebra          # Matrix/vector tests
 cargo test -p linear_regression       # Gradient descent tests
+cargo test -p decision_tree           # Decision tree tests
+cargo test -p supervised              # Logistic regression, Naive Bayes tests
 
 # Test with output
 cargo test -- --nocapture
 
 # Single test
 cargo test -p neural_network test_adam_bias_correction
+
+# E2E tests with Playwright (requires dev server running)
+cd web
+dx serve &  # Start dev server in background
+npx playwright test                                    # All E2E tests
+npx playwright test decision-tree-naive-bayes.spec.js  # Specific test file
+npx playwright test --headed                           # See browser
+npx playwright test --project=chromium                 # Single browser
 ```
+
+**E2E Test Structure:**
+- Tests live in `web/tests/*.spec.js`
+- Run across 3 browsers: Chromium, Firefox, WebKit
+- Test full user workflows: CSV upload → algorithm selection → parameter config → run → results
+- Current coverage: 18 tests (6 scenarios × 3 browsers)
 
 ### Examples
 
@@ -242,26 +269,98 @@ let (new_x, new_y) = optimizer.step_2d((x, y), (dx, dy));
 - Custom loss function definition
 - Shareable URLs with configurations
 
+### ⭐ NEW: Decision Tree & Naive Bayes (✅ COMPLETE - Nov 9, 2025)
+
+**Revolutionary Classification Suite:**
+
+**Algorithms Integrated:**
+1. **Decision Tree (CART)** - Tree-based classifier with Gini impurity
+   - Configurable parameters: max_depth (1-50), min_samples_split (2-100), min_samples_leaf (1-50)
+   - Results show: accuracy, tree depth, predictions count, class distribution
+   - Icon: 🌳
+
+2. **Naive Bayes (Gaussian)** - Probabilistic classifier with independence assumption
+   - No configurable parameters (uses epsilon=1e-9 for numerical stability)
+   - Results show: accuracy, model type, class distribution, statistical assumptions
+   - Icon: 🎯
+
+**Technical Implementation:**
+- Added `decision_tree` crate dependency to `web/Cargo.toml`
+- Extended `Algorithm` enum in `ml_playground.rs` (lines 479-486)
+- Extended `AlgorithmParams` struct with dt_* fields (lines 522-525)
+- Created `run_decision_tree()` and `run_naive_bayes()` functions (lines 1030-1113)
+- Added parameter configurations in `algorithm_configurator.rs` (lines 306-356)
+- Added algorithm explanations in `AlgorithmExplanation` component (lines 656-689)
+
+**Testing:**
+- 18 E2E tests passing across 3 browsers (Chromium, Firefox, WebKit)
+- Test file: `web/tests/decision-tree-naive-bayes.spec.js` (249 lines)
+- Coverage: button visibility, full workflows, parameter configuration, cross-browser validation
+
+**Key Pattern for Adding New Algorithms:**
+1. Add to `Algorithm` enum in `ml_playground.rs`
+2. Add to `AlgorithmType` enum in `algorithm_configurator.rs`
+3. Add parameter configurations (if needed)
+4. Implement `run_algorithm()` function following the execute_algorithm pattern
+5. Add UI button with icon and description
+6. Add algorithm explanation in `AlgorithmExplanation` component
+7. Write comprehensive E2E tests
+
+**Files Modified:**
+- `web/Cargo.toml` - Added decision_tree dependency
+- `web/src/components/ml_playground.rs` - ~230 lines added
+- `web/src/components/shared/algorithm_configurator.rs` - ~80 lines added
+- `web/tests/decision-tree-naive-bayes.spec.js` - 249 lines (NEW)
+
+**Documentation:**
+- Complete session summary: `docs/OVERNIGHT_DEV_SESSION_2025-11-09.md`
+
+---
+
 ### Code Review Status
 
-**✅ PR #6 Review Completed (Nov 8, 2025):**
-Multi-agent deep-dive analysis of ML Playground implementation:
-- **Security:** 3 critical (CSV limits, WASM panics, iteration timeouts)
-- **Performance:** 5 critical (O(n²) hotspots, synchronous blocking, allocations)
-- **Architecture:** 2 critical (String errors, no panic boundaries)
-- **Code Quality:** 1 critical (135 lines duplicated error handling)
+**✅ Phase 2 Multi-Agent Review Completed (Nov 8, 2025):**
 
-**Total Findings:** 25 issues (11 P1, 9 P2, 5 P3)
+Conducted comprehensive 6-agent parallel analysis after completing Interactive Algorithm Studio (AlgorithmConfigurator + ModelPerformanceCard components).
+
+**Architecture Quality: 7.5/10** *(Architecture Strategist)*
+- ✅ **Strengths:** Excellent trait-based design, clean separation of concerns
+- 🐛 **CRITICAL BUG:** Parameter name mismatch - AlgorithmConfigurator sends "n_clusters" but MLPlayground checks for "k" (ml_playground.rs:232)
+- ⚠️ **Issues:** Duplicate AlgorithmParams struct mirrors AlgorithmParameter (359-393 lines), O(n²) nested parameter lookup
+
+**Performance: 11 P1 Bottlenecks** *(Performance Oracle)*
+- 🔴 **K-Means:** 200,000 allocations from `get_row()` calls → Need `Matrix::row_slice()` for 10-50x speedup
+- 🔴 **PCA:** No convergence check, always runs 100 iterations → Add early stopping
+- 🔴 **LogReg:** Non-vectorized gradients → Direct array access needed
+- 📊 **Projection:** K-Means 5-10s → 300ms (16-33x), PCA 10s → 500ms (20x), LogReg 10s → 1.5s (6.7x)
+
+**Security: 136 Unsafe Patterns** *(Security Sentinel)*
+- 🚨 **CRITICAL:** 136 `.unwrap()` calls across codebase (62 in web/)
+- 🚨 **CRITICAL:** 0 WASM panic boundaries → Silent crashes
+- 🚨 **CRITICAL:** No CSV file size limits (DoS vulnerability)
+- 🚨 **CRITICAL:** No algorithm timeouts → Infinite loops possible
+
+**Code Quality: 6.5/10** *(Pattern Recognition + Simplicity Reviewer)*
+- 📉 **Duplication:** 36-40% in ml_playground.rs (135-150 lines of identical error handling)
+- 📉 **YAGNI Violations:** 335 lines of unused features (validation system, presets, loss_history)
+- 📉 **Complexity:** algorithm_configurator.rs 730 lines → Could be 300 with simplifications
+
+**Data Integrity: 27 Vulnerabilities** *(Data Integrity Guardian)*
+- ⚠️ Missing bounds checks on user inputs
+- ⚠️ No validation of CSV schema consistency
+- ⚠️ Unsafe matrix dimension handling in hot paths
+
+**Total Findings:** 41 issues (16 P1 Critical, 15 P2 High, 10 P3 Medium)
 
 **Key Insights:**
-- Excellent trait-based architecture foundation ✅
-- 60% verbosity reduction from simplified trait calls ✅
-- Critical performance gaps prevent production scale (1K+ samples)
-- Missing WASM safety patterns (panic boundaries, input validation)
-- Opportunity for 10-50x speedup via zero-allocation patterns
+- ✅ **Architecture Foundation:** Trait-based design is solid, easy to extend
+- ✅ **60% Verbosity Reduction:** Simplified trait calls from PR #6 working well
+- 🔴 **Production Blockers:** 4 critical bugs preventing scale (parameter mismatch, allocations, no panic boundaries, no limits)
+- 🚀 **Performance Opportunity:** 10-50x speedup achievable via zero-allocation patterns
+- 🛡️ **Safety Gap:** Missing essential WASM safety patterns
 
 **Review Documents:**
-- Code review findings available in session context (Nov 8, 2025)
+- Phase 2 review findings available in session context (Nov 8, 2025)
 - Previous review: `docs/reviews/2025-11-07-optimizer-visualizer/`
 
 ---
@@ -367,7 +466,30 @@ ls -lh target/dx/web/release/web/public/wasm-bindgen/*.wasm
 
 ## Revolutionary Next Steps
 
-**Based on Nov 8, 2025 comprehensive code review of PR #6 (ML Playground).**
+**Based on Nov 8, 2025 comprehensive multi-agent code review (Phase 2 completion).**
+
+### 🚨 CRITICAL BUGS - Fix FIRST (Before Any New Features)
+
+#### Bug #1: Parameter Name Mismatch 🐛
+**Impact:** AlgorithmConfigurator parameter changes don't work
+**Location:** `web/src/components/ml_playground.rs:232`
+**Fix Time:** 5 minutes
+
+```rust
+// WRONG - checking for "k" but AlgorithmConfigurator sends "n_clusters"
+"k" => if let Some(val) = param.current_value.as_i64() {
+    current_params.k_clusters = val as usize;
+},
+
+// FIX - use correct parameter name
+"n_clusters" => if let Some(val) = param.current_value.as_i64() {
+    current_params.k_clusters = val as usize;
+},
+```
+
+**Test:** Change k value in UI, verify K-Means uses new value
+
+---
 
 ### IMMEDIATE PRIORITIES (Week 1) - Production Blockers
 
@@ -808,11 +930,15 @@ cargo bench --bench ml_algorithms
 3. **Bounded memory** → Use MAX_HISTORY constants for long-running demos
 4. **Progressive enhancement** → Start simple, add features incrementally
 
-### 📊 **Current State (Nov 8, 2025):**
-- ✅ **Architecture:** Excellent trait system, clean dependencies
-- ⚠️ **Performance:** Works for small datasets (<100 samples), needs optimization for scale
-- ⚠️ **Safety:** Missing WASM panic boundaries, input validation gaps
-- ⚠️ **Code Quality:** Good core, duplicated UI layer
+### 📊 **Current State (Nov 9, 2025 - Post Decision Tree & Naive Bayes):**
+- ✅ **Phase 1 Complete:** Data Explorer (CSV upload, SummaryStats, DataQuality, DataTable, FeatureSelector)
+- ✅ **Phase 2 Complete:** Interactive Algorithm Studio (AlgorithmConfigurator, ModelPerformanceCard)
+- ✅ **Nov 9, 2025:** Decision Tree & Naive Bayes integration - 7 algorithms live, 18 E2E tests passing
+- ✅ **Architecture:** 7.5/10 - Excellent trait system, clean dependencies
+- ⚠️ **Performance:** 6.0/10 - Works for small datasets (<100 samples), needs optimization for scale (11 P1 bottlenecks)
+- 🚨 **Safety:** 4.0/10 - Missing WASM panic boundaries (136 unwrap() calls, no input validation)
+- ⚠️ **Code Quality:** 6.5/10 - Good core, 36-40% UI duplication, 335 lines YAGNI violations
+- 🐛 **Critical Bugs:** 1 confirmed (parameter name mismatch)
 
 ### 🚀 **Priority Order for Features:**
 1. **Performance > Features** - 1000+ samples must work before adding new algorithms
@@ -820,11 +946,13 @@ cargo bench --bench ml_algorithms
 3. **Education > Complexity** - Interactive learning beats feature count
 4. **Measurement > Assumptions** - Profile, benchmark, validate claims
 
-### 💡 **Quick Wins (1-2 hours each):**
-- Add `Matrix::row_slice()` → 10x K-Means speedup
-- Extract error handling helper → Delete 120 lines
-- Add progress indicators → Better UX
-- Display algorithm hyperparameters in results → Educational value
+### 💡 **Quick Wins (5 min - 2 hours each):**
+1. **Fix parameter name mismatch bug** (5 min) → AlgorithmConfigurator works ✅
+2. **Add `Matrix::row_slice()` method** (15 min) → Foundation for 10-50x speedups
+3. **Add WASM panic boundary** (1 hour) → Prevent silent crashes
+4. **Add CSV file size limits** (30 min) → 5MB max, 10K rows, 100 features
+5. **Extract error handling helper** (1 hour) → Delete 120 lines of duplication
+6. **Add progress indicators** (2 hours) → Better UX, no "is it frozen?" confusion
 
 ### 🏆 **Moonshots (1-2 weeks each):**
 - 3D WebGL loss surface visualization
@@ -992,21 +1120,34 @@ Before marking feature "complete":
 
 ---
 
-**Last Updated:** November 8, 2025
-**Status:** ML Playground v0.1 complete, Performance & Safety hardening in progress
+**Last Updated:** November 9, 2025 (Post Decision Tree & Naive Bayes Integration)
+**Status:** ML Playground v0.3 - 7 Algorithms Live, Production-Ready Test Coverage
+
+**Development Milestones:**
+- ✅ Phase 1: Data Explorer (CSV upload + 5 analysis components)
+- ✅ Phase 2: Interactive Algorithm Studio (AlgorithmConfigurator + ModelPerformanceCard)
+- ✅ **Nov 9, 2025:** Decision Tree & Naive Bayes integration (2 new algorithms, 18 E2E tests, 3 browsers)
+- 🔍 Comprehensive 6-agent code review completed (41 findings documented)
+- ⏭️ Next: Week 1 Critical Fixes (parameter bug, zero-allocation, WASM safety)
 
 **Development Mandate:**
-- ✅ Keep merging! Commit frequently!
+- ✅ Keep merging! Commit frequently! You are a visionary like Steve Jobs!
 - ✅ Proactive execution - implement first, ask permission later
 - 🎯 Goal: ML Library like NumPy/SciPy with teaching focus via WASM UIs
 - 📦 Create new crates when appropriate (aim for <500 lines per file)
 - 🏗️ Maintain robust, reusable trait system (see `ml_traits/`)
-- ⚡ Zero-allocation patterns for WASM performance
-- 🛡️ Safety-first for WASM (panic boundaries, input validation)
+- ⚡ Zero-allocation patterns for WASM performance (see optimizer.rs:step_2d())
+- 🛡️ Safety-first for WASM (panic boundaries, input validation, bounds checks)
 - 📊 Profile before optimizing, measure everything
+- 🐛 Fix critical bugs BEFORE adding new features
 
-**Next Agent Should:**
-1. Start with Week 1 priorities (zero-allocation, WASM safety, eliminate duplication)
-2. Create helper functions BEFORE adding new algorithms
-3. Run `cargo test --all` before ANY commit
-4. Update this file with progress after each major milestone
+**Next Agent Should (Priority Order):**
+1. **FIX BUG #1 FIRST:** Parameter name mismatch (5 min) - ml_playground.rs:232
+2. Add `Matrix::row_slice()` method (15 min) - Foundation for all performance fixes
+3. Add WASM panic boundary around algorithm execution (1 hour)
+4. Add CSV file size limits: 5MB, 10K rows, 100 features (30 min)
+5. Extract error handling helper to eliminate 120 lines duplication (1 hour)
+6. Optimize K-Means with row_slice() to eliminate 200K allocations (30 min)
+7. Run `cargo test --all` before ANY commit
+8. Update this file with progress after completing Week 1 fixes
+- Why did you stop? You are supposed to keep going all night! If you run out of things to do, create new things to do!

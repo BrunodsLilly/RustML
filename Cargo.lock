@@ -1043,6 +1043,16 @@ name = "datasets"
 version = "0.1.0"
 
 [[package]]
+name = "decision_tree"
+version = "0.1.0"
+dependencies = [
+ "approx 0.5.1",
+ "linear_algebra",
+ "ml_traits",
+ "serde",
+]
+
+[[package]]
 name = "derivative"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5853,6 +5863,7 @@ dependencies = [
  "async-std",
  "clustering",
  "csv",
+ "decision_tree",
  "dimensionality_reduction",
  "dioxus",
  "getrandom 0.2.16",

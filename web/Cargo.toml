@@ -14,6 +14,7 @@ loader = { path = "../loader" }
 neural_network = { path = "../neural_network" }
 ml_traits = { path = "../ml_traits" }
 clustering = { path = "../clustering" }
+decision_tree = { path = "../decision_tree" }
 dimensionality_reduction = { path = "../dimensionality_reduction" }
 preprocessing = { path = "../preprocessing" }
 supervised = { path = "../supervised" }

@@ -77,10 +77,7 @@ impl IssueType {
 }
 
 /// Analyze data quality and detect issues
-pub fn analyze_quality(
-    columns: &[String],
-    data: &[Vec<String>],
-) -> Vec<QualityIssue> {
+pub fn analyze_quality(columns: &[String], data: &[Vec<String>]) -> Vec<QualityIssue> {
     let mut issues = Vec::new();
 
     if data.is_empty() {
@@ -110,14 +107,18 @@ pub fn analyze_quality(
                 severity,
                 column: col_name.clone(),
                 issue_type: IssueType::MissingValues,
-                description: format!("{:.1}% of values are missing ({} rows)", missing_pct, missing_count),
+                description: format!(
+                    "{:.1}% of values are missing ({} rows)",
+                    missing_pct, missing_count
+                ),
                 affected_rows: missing_count,
                 recommendation: if missing_pct > 50.0 {
                     "Consider dropping this column or imputing with domain knowledge".to_string()
                 } else if missing_pct > 20.0 {
                     "Use imputation (mean/median for numeric, mode for categorical)".to_string()
                 } else {
-                    "Small amount of missing data, safe to drop rows or use simple imputation".to_string()
+                    "Small amount of missing data, safe to drop rows or use simple imputation"
+                        .to_string()
                 },
             });
         }
@@ -148,12 +149,21 @@ pub fn analyze_quality(
                 let outlier_pct = (outlier_count as f64 / numeric_values.len() as f64) * 100.0;
                 if outlier_pct > 1.0 {
                     issues.push(QualityIssue {
-                        severity: if outlier_pct > 10.0 { Severity::Warning } else { Severity::Info },
+                        severity: if outlier_pct > 10.0 {
+                            Severity::Warning
+                        } else {
+                            Severity::Info
+                        },
                         column: col_name.clone(),
                         issue_type: IssueType::Outliers,
-                        description: format!("{:.1}% of values are outliers ({} values)", outlier_pct, outlier_count),
+                        description: format!(
+                            "{:.1}% of values are outliers ({} values)",
+                            outlier_pct, outlier_count
+                        ),
                         affected_rows: outlier_count,
-                        recommendation: "Consider robust scaling or capping outliers at percentile thresholds".to_string(),
+                        recommendation:
+                            "Consider robust scaling or capping outliers at percentile thresholds"
+                                .to_string(),
                     });
                 }
             }
@@ -164,7 +174,8 @@ pub fn analyze_quality(
                 let variance = numeric_values
                     .iter()
                     .map(|&x| (x - mean).powi(2))
-                    .sum::<f64>() / numeric_values.len() as f64;
+                    .sum::<f64>()
+                    / numeric_values.len() as f64;
                 let std_dev = variance.sqrt();
 
                 if std_dev < 0.01 {
@@ -174,15 +185,20 @@ pub fn analyze_quality(
                         issue_type: IssueType::LowVariance,
                         description: format!("Very low variance (std={:.6})", std_dev),
                         affected_rows: 0,
-                        recommendation: "Consider removing this feature as it provides little information".to_string(),
+                        recommendation:
+                            "Consider removing this feature as it provides little information"
+                                .to_string(),
                     });
                 }
             }
         }
 
         // Check for high cardinality in categorical columns
-        let unique_values: std::collections::HashSet<&str> =
-            column_data.iter().filter(|s| !s.trim().is_empty()).copied().collect();
+        let unique_values: std::collections::HashSet<&str> = column_data
+            .iter()
+            .filter(|s| !s.trim().is_empty())
+            .copied()
+            .collect();
         let cardinality = unique_values.len();
         let cardinality_ratio = cardinality as f64 / n_rows as f64;
 
@@ -191,22 +207,30 @@ pub fn analyze_quality(
                 severity: Severity::Info,
                 column: col_name.clone(),
                 issue_type: IssueType::HighCardinality,
-                description: format!("{} unique values ({:.1}% of rows)", cardinality, cardinality_ratio * 100.0),
+                description: format!(
+                    "{} unique values ({:.1}% of rows)",
+                    cardinality,
+                    cardinality_ratio * 100.0
+                ),
                 affected_rows: cardinality,
-                recommendation: "Consider grouping rare categories or using target encoding".to_string(),
+                recommendation: "Consider grouping rare categories or using target encoding"
+                    .to_string(),
             });
         }
     }
 
     // Check for duplicate rows
-    let unique_rows: std::collections::HashSet<Vec<String>> =
-        data.iter().cloned().collect();
+    let unique_rows: std::collections::HashSet<Vec<String>> = data.iter().cloned().collect();
     let duplicate_count = n_rows - unique_rows.len();
 
     if duplicate_count > 0 {
         let dup_pct = (duplicate_count as f64 / n_rows as f64) * 100.0;
         issues.push(QualityIssue {
-            severity: if dup_pct > 10.0 { Severity::Warning } else { Severity::Info },
+            severity: if dup_pct > 10.0 {
+                Severity::Warning
+            } else {
+                Severity::Info
+            },
             column: "Dataset".to_string(),
             issue_type: IssueType::Duplicates,
             description: format!("{:.1}% duplicate rows ({} rows)", dup_pct, duplicate_count),
@@ -267,17 +291,34 @@ pub struct DataQualityProps {
 #[component]
 pub fn DataQuality(props: DataQualityProps) -> Element {
     // Count issues by severity
-    let critical = props.issues.iter().filter(|i| i.severity == Severity::Critical).count();
-    let errors = props.issues.iter().filter(|i| i.severity == Severity::Error).count();
-    let warnings = props.issues.iter().filter(|i| i.severity == Severity::Warning).count();
-    let info = props.issues.iter().filter(|i| i.severity == Severity::Info).count();
+    let critical = props
+        .issues
+        .iter()
+        .filter(|i| i.severity == Severity::Critical)
+        .count();
+    let errors = props
+        .issues
+        .iter()
+        .filter(|i| i.severity == Severity::Error)
+        .count();
+    let warnings = props
+        .issues
+        .iter()
+        .filter(|i| i.severity == Severity::Warning)
+        .count();
+    let info = props
+        .issues
+        .iter()
+        .filter(|i| i.severity == Severity::Info)
+        .count();
 
     // Overall quality score (100 - weighted penalties)
-    let quality_score = 100.0 -
-        (critical as f64 * 25.0 +
-         errors as f64 * 15.0 +
-         warnings as f64 * 5.0 +
-         info as f64 * 1.0).min(100.0);
+    let quality_score = 100.0
+        - (critical as f64 * 25.0
+            + errors as f64 * 15.0
+            + warnings as f64 * 5.0
+            + info as f64 * 1.0)
+            .min(100.0);
 
     rsx! {
         div { class: "data-quality-container",
@@ -437,7 +478,9 @@ mod tests {
         ];
 
         let issues = analyze_quality(&columns, &data);
-        assert!(issues.iter().any(|i| i.issue_type == IssueType::MissingValues));
+        assert!(issues
+            .iter()
+            .any(|i| i.issue_type == IssueType::MissingValues));
     }
 
     #[test]

@@ -1,0 +1,14 @@
+{
+  "testCommand": "cargo test --all",
+  "lintCommand": "cargo clippy --all -- -D warnings",
+  "requireCoverage": false,
+  "minCoverage": 80,
+  "autoFix": false,
+  "maxAttempts": 50,
+  "stopOnMorning": true,
+  "morningHour": 7,
+  "additionalChecks": {
+    "format": "cargo fmt --all -- --check",
+    "webBuild": "cd web && dx build --platform web"
+  }
+}

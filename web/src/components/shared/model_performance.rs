@@ -82,7 +82,10 @@ impl PerformanceMetrics {
     }
 
     pub fn improvement_percent(&self) -> f64 {
-        if !self.loss_history.is_empty() && self.loss_history[0].is_finite() && self.loss_history[0] > 0.0 {
+        if !self.loss_history.is_empty()
+            && self.loss_history[0].is_finite()
+            && self.loss_history[0] > 0.0
+        {
             let initial = self.loss_history[0];
             ((initial - self.best_loss) / initial * 100.0).max(0.0)
         } else {
@@ -276,7 +279,8 @@ pub fn LossChart(props: LossChartProps) -> Element {
     }
 
     // Filter out non-finite values and get valid data
-    let valid_data: Vec<(usize, f64)> = props.history
+    let valid_data: Vec<(usize, f64)> = props
+        .history
         .iter()
         .enumerate()
         .filter(|(_, &loss)| loss.is_finite())
@@ -290,8 +294,14 @@ pub fn LossChart(props: LossChartProps) -> Element {
     }
 
     // Calculate bounds
-    let min_loss = valid_data.iter().map(|(_, loss)| loss).fold(f64::INFINITY, |a, &b| a.min(b));
-    let max_loss = valid_data.iter().map(|(_, loss)| loss).fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+    let min_loss = valid_data
+        .iter()
+        .map(|(_, loss)| loss)
+        .fold(f64::INFINITY, |a, &b| a.min(b));
+    let max_loss = valid_data
+        .iter()
+        .map(|(_, loss)| loss)
+        .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
     let loss_range = (max_loss - min_loss).max(1e-10);
 
     // Build path

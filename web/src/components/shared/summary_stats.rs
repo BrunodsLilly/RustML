@@ -35,10 +35,7 @@ impl ColumnStats {
         let max = sorted.last().copied().unwrap_or(0.0);
 
         // Standard deviation
-        let variance = values
-            .iter()
-            .map(|&x| (x - mean).powi(2))
-            .sum::<f64>() / count as f64;
+        let variance = values.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / count as f64;
         let std_dev = variance.sqrt();
 
         Self {

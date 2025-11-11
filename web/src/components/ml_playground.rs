@@ -3,20 +3,25 @@
 //! This component provides a comprehensive interface for testing all ML algorithms
 //! with user-uploaded CSV data.
 
+use std::collections::HashMap;
+
+use clustering::kmeans::KMeans;
+use decision_tree::{DecisionTreeClassifier, SplitCriterion};
+use dimensionality_reduction::pca::PCA;
 use dioxus::prelude::*;
 use loader::csv_loader::CsvDataset;
-use clustering::kmeans::KMeans;
-use dimensionality_reduction::pca::PCA;
-use preprocessing::scalers::{StandardScaler, MinMaxScaler};
-use supervised::logistic_regression::LogisticRegression;
-use ml_traits::clustering::Clusterer;
-use ml_traits::unsupervised::UnsupervisedModel;
+use ml_traits::clustering::{CentroidClusterer, Clusterer};
 use ml_traits::preprocessing::Transformer;
 use ml_traits::supervised::SupervisedModel;
+use ml_traits::unsupervised::UnsupervisedModel;
+use preprocessing::scalers::{MinMaxScaler, StandardScaler};
+use supervised::logistic_regression::LogisticRegression;
+use supervised::naive_bayes::GaussianNB;
 
 use crate::components::shared::{
-    AlgorithmConfigurator, AlgorithmType, AlgorithmCategory, AlgorithmParameter,
-    ModelPerformanceCard, PerformanceMetrics, TrainingStatus,
+    AlgorithmCategory, AlgorithmConfigurator, AlgorithmParameter, AlgorithmResults, AlgorithmType,
+    MetricValue, ModelPerformanceCard, PerformanceMetrics, ResultsDisplay, TrainingStatus,
+    Visualization,
 };
 
 /// ML Playground component
@@ -35,6 +40,15 @@ pub fn MLPlayground() -> Element {
     // State for training metrics
     let mut performance_metrics = use_signal(|| None::<PerformanceMetrics>);
     let mut show_performance = use_signal(|| false);
+
+    // State for train/test split
+    let mut train_split_pct = use_signal(|| 80); // Default 80% train, 20% test
+    let mut show_predictions = use_signal(|| false);
+    let mut predictions_data = use_signal(|| None::<PredictionsData>);
+
+    // State for algorithm results display
+    let mut algorithm_results = use_signal(|| None::<AlgorithmResults>);
+    let mut show_results_display = use_signal(|| false);
 
     rsx! {
         div { class: "ml-playground",
@@ -60,7 +74,33 @@ pub fn MLPlayground() -> Element {
                                         let files = file_engine.files();
                                         if let Some(file_name) = files.first() {
                                             if let Some(file_contents) = file_engine.read_file(file_name).await {
+                                                // Input validation: file size limit (5MB max)
+                                                const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
+                                                if file_contents.len() > MAX_FILE_SIZE {
+                                                    result_message.set(format!(
+                                                        "❌ File too large: {:.2} MB (max 5MB)\n\n\
+                                                        Large datasets can crash the browser.\n\
+                                                        Try filtering your data or using a smaller sample.",
+                                                        file_contents.len() as f64 / (1024.0 * 1024.0)
+                                                    ));
+                                                    return;
+                                                }
+
                                                 if let Ok(content_str) = String::from_utf8(file_contents) {
+                                                    // Input validation: row and column limits
+                                                    const MAX_ROWS: usize = 10000;
+                                                    const MAX_COLS: usize = 100;
+
+                                                    let line_count = content_str.lines().count();
+                                                    if line_count > MAX_ROWS + 1 { // +1 for header
+                                                        result_message.set(format!(
+                                                            "❌ Too many rows: {} (max {})\n\n\
+                                                            Try sampling your dataset first.",
+                                                            line_count - 1, MAX_ROWS
+                                                        ));
+                                                        return;
+                                                    }
+
                                                     // For unsupervised learning, use first column as dummy target
                                                     // We'll only use the features anyway
                                                     let headers: Vec<&str> = content_str.lines().next()
@@ -70,6 +110,12 @@ pub fn MLPlayground() -> Element {
 
                                                     if headers.is_empty() {
                                                         result_message.set("❌ CSV has no headers".to_string());
+                                                    } else if headers.len() > MAX_COLS {
+                                                        result_message.set(format!(
+                                                            "❌ Too many columns: {} (max {})\n\n\
+                                                            Consider reducing feature count with PCA first.",
+                                                            headers.len(), MAX_COLS
+                                                        ));
                                                     } else {
                                                         let target_col = headers[0];
                                                         match CsvDataset::from_csv(&content_str, target_col) {
@@ -110,6 +156,57 @@ pub fn MLPlayground() -> Element {
                                     p { "Column Names: {dataset.feature_names.join(\", \")}" }
                                 }
                             }
+
+                            // Train/Test Split Configuration
+                            div { class: "train-test-split",
+                                h3 { "📊 Data Split" }
+                                p { class: "split-description",
+                                    "Split your data into training and testing sets for model evaluation"
+                                }
+
+                                div { class: "split-control",
+                                    label {
+                                        r#for: "train-split-slider",
+                                        "Training Data: {train_split_pct}%"
+                                    }
+                                    input {
+                                        r#type: "range",
+                                        id: "train-split-slider",
+                                        min: "50",
+                                        max: "90",
+                                        step: "5",
+                                        value: "{train_split_pct}",
+                                        oninput: move |evt| {
+                                            if let Ok(val) = evt.value().parse::<i32>() {
+                                                train_split_pct.set(val);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                div { class: "split-summary",
+                                    {
+                                        let train_pct = *train_split_pct.read();
+                                        let train_count = (dataset.num_samples * (train_pct as usize)) / 100;
+                                        let test_count = dataset.num_samples - train_count;
+                                        let test_pct = 100 - train_pct;
+                                        rsx! {
+                                            div { class: "split-info train-info",
+                                                span { class: "split-label", "Train:" }
+                                                span { class: "split-value",
+                                                    "{train_count} samples ({train_pct}%)"
+                                                }
+                                            }
+                                            div { class: "split-info test-info",
+                                                span { class: "split-label", "Test:" }
+                                                span { class: "split-value",
+                                                    "{test_count} samples ({test_pct}%)"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -141,6 +238,24 @@ pub fn MLPlayground() -> Element {
                             icon: "🎲",
                             name: "Logistic Regression",
                             description: "Classification model"
+                        }
+
+                        AlgorithmButton {
+                            algorithm: Algorithm::DecisionTree,
+                            selected: *selected_algorithm.read() == Algorithm::DecisionTree,
+                            onclick: move |_| selected_algorithm.set(Algorithm::DecisionTree),
+                            icon: "🌳",
+                            name: "Decision Tree",
+                            description: "Tree-based classifier"
+                        }
+
+                        AlgorithmButton {
+                            algorithm: Algorithm::NaiveBayes,
+                            selected: *selected_algorithm.read() == Algorithm::NaiveBayes,
+                            onclick: move |_| selected_algorithm.set(Algorithm::NaiveBayes),
+                            icon: "🎯",
+                            name: "Naive Bayes",
+                            description: "Probabilistic classifier"
                         }
 
                         AlgorithmButton {
@@ -192,14 +307,98 @@ pub fn MLPlayground() -> Element {
                                         performance_metrics.set(Some(PerformanceMetrics::new(max_iter)));
 
                                         if let Some(ref dataset) = *csv_dataset.read() {
-                                            let result = run_algorithm_with_metrics(
-                                                *selected_algorithm.read(),
-                                                dataset,
-                                                &algorithm_params.read(),
-                                                &mut performance_metrics
-                                            );
-                                            result_message.set(result);
+                                            // Special handling for algorithms with new results display
+                                            let current_algo = *selected_algorithm.read();
+                                            if matches!(
+                                                current_algo,
+                                                Algorithm::NaiveBayes | Algorithm::DecisionTree | Algorithm::KMeans | Algorithm::PCA | Algorithm::LogisticRegression | Algorithm::StandardScaler | Algorithm::MinMaxScaler
+                                            ) {
+                                                let algo_name = current_algo.name().to_string();
+                                                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                                    match current_algo {
+                                                        Algorithm::NaiveBayes => {
+                                                            run_naive_bayes(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::DecisionTree => {
+                                                            run_decision_tree(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::KMeans => {
+                                                            run_kmeans(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::PCA => {
+                                                            run_pca(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::LogisticRegression => {
+                                                            run_logistic_regression(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::StandardScaler => {
+                                                            run_standard_scaler(dataset, &algorithm_params.read())
+                                                        }
+                                                        Algorithm::MinMaxScaler => {
+                                                            run_minmax_scaler(dataset, &algorithm_params.read())
+                                                        }
+                                                    }
+                                                }));
+
+                                                match result {
+                                                    Ok(Ok(results)) => {
+                                                        algorithm_results.set(Some(results));
+                                                        show_results_display.set(true);
+                                                        show_performance.set(false);
+                                                        result_message.set(String::new());
+                                                    }
+                                                    Ok(Err(e)) => {
+                                                        result_message.set(format!("❌ {} failed: {}", algo_name, e));
+                                                    }
+                                                    Err(panic_info) => {
+                                                        web_sys::console::error_1(
+                                                            &format!("❌ WASM panic caught during {} execution", algo_name).into(),
+                                                        );
+                                                        web_sys::console::error_1(&format!("{:?}", panic_info).into());
+                                                        result_message.set(format!(
+                                                            "❌ {} crashed unexpectedly.\n\n\
+                                                            Check browser console for details.",
+                                                            algo_name
+                                                        ));
+                                                    }
+                                                }
+                                            } else {
+                                                // Standard handling for other algorithms
+                                                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                                    run_algorithm_with_metrics(
+                                                        *selected_algorithm.read(),
+                                                        dataset,
+                                                        &algorithm_params.read(),
+                                                        &mut performance_metrics,
+                                                        *train_split_pct.read() as usize,
+                                                        &mut predictions_data,
+                                                        &mut show_predictions
+                                                    )
+                                                }));
+
+                                                match result {
+                                                    Ok(msg) => result_message.set(msg),
+                                                    Err(panic_info) => {
+                                                    // Log panic details for debugging
+                                                    web_sys::console::error_1(&"❌ WASM panic caught during algorithm execution".into());
+                                                    web_sys::console::error_1(&format!("{:?}", panic_info).into());
+
+                                                    result_message.set(format!(
+                                                        "❌ Algorithm crashed unexpectedly.\n\n\
+                                                        This can happen when:\n\
+                                                        • Dataset is too large (try <1000 rows)\n\
+                                                        • Features have invalid values (NaN, Infinity)\n\
+                                                        • Parameters are out of valid range\n\n\
+                                                        💡 Try:\n\
+                                                        • Reducing dataset size\n\
+                                                        • Checking for missing/invalid data\n\
+                                                        • Using different parameter values\n\n\
+                                                        Check browser console for technical details."
+                                                    ));
+                                                }
+                                            }
                                         }
+                                        }  // Close if let Some(ref dataset)
 
                                         is_processing.set(false);
                                     });
@@ -229,7 +428,7 @@ pub fn MLPlayground() -> Element {
                                             // Update parameters based on algorithm type
                                             for param in params {
                                                 match param.name.as_str() {
-                                                    "k" => if let Some(val) = param.current_value.as_i64() {
+                                                    "n_clusters" => if let Some(val) = param.current_value.as_i64() {
                                                         current_params.k_clusters = val as usize;
                                                     },
                                                     "max_iterations" => if let Some(val) = param.current_value.as_i64() {
@@ -251,6 +450,15 @@ pub fn MLPlayground() -> Element {
                                                     },
                                                     "learning_rate" => if let Some(val) = param.current_value.as_f64() {
                                                         current_params.learning_rate = val;
+                                                    },
+                                                    "max_depth" => if let Some(val) = param.current_value.as_i64() {
+                                                        current_params.dt_max_depth = val as usize;
+                                                    },
+                                                    "min_samples_split" => if let Some(val) = param.current_value.as_i64() {
+                                                        current_params.dt_min_samples_split = val as usize;
+                                                    },
+                                                    "min_samples_leaf" => if let Some(val) = param.current_value.as_i64() {
+                                                        current_params.dt_min_samples_leaf = val as usize;
                                                     },
                                                     "min_value" => if let Some(val) = param.current_value.as_f64() {
                                                         current_params.scaler_min = val;
@@ -295,9 +503,25 @@ pub fn MLPlayground() -> Element {
                         }
                     }
 
+                    // New Results Display for Naive Bayes
+                    if *show_results_display.read() {
+                        if let Some(results) = algorithm_results.read().clone() {
+                            ResultsDisplay {
+                                results: Signal::new(results)
+                            }
+                        }
+                    }
+
                     if !result_message.read().is_empty() {
                         div { class: "result-message",
                             "{result_message}"
+                        }
+                    }
+
+                    // Predictions Table (shown after supervised learning)
+                    if *show_predictions.read() {
+                        if let Some(ref pred_data) = *predictions_data.read() {
+                            PredictionsTable { predictions: pred_data.clone() }
                         }
                     }
 
@@ -329,6 +553,8 @@ enum Algorithm {
     KMeans,
     PCA,
     LogisticRegression,
+    DecisionTree,
+    NaiveBayes,
     StandardScaler,
     MinMaxScaler,
 }
@@ -339,6 +565,8 @@ impl Algorithm {
             Algorithm::KMeans => "K-Means Clustering",
             Algorithm::PCA => "PCA",
             Algorithm::LogisticRegression => "Logistic Regression",
+            Algorithm::DecisionTree => "Decision Tree",
+            Algorithm::NaiveBayes => "Naive Bayes",
             Algorithm::StandardScaler => "Standard Scaler",
             Algorithm::MinMaxScaler => "MinMax Scaler",
         }
@@ -349,6 +577,8 @@ impl Algorithm {
             Algorithm::KMeans => AlgorithmType::KMeans,
             Algorithm::PCA => AlgorithmType::PCA,
             Algorithm::LogisticRegression => AlgorithmType::LogisticRegression,
+            Algorithm::DecisionTree => AlgorithmType::DecisionTree,
+            Algorithm::NaiveBayes => AlgorithmType::NaiveBayes,
             Algorithm::StandardScaler => AlgorithmType::StandardScaler,
             Algorithm::MinMaxScaler => AlgorithmType::MinMaxScaler,
         }
@@ -371,6 +601,11 @@ struct AlgorithmParams {
     logreg_max_iter: usize,
     logreg_tolerance: f64,
 
+    // Decision Tree
+    dt_max_depth: usize,
+    dt_min_samples_split: usize,
+    dt_min_samples_leaf: usize,
+
     // Scalers
     scaler_min: f64,
     scaler_max: f64,
@@ -386,10 +621,31 @@ impl Default for AlgorithmParams {
             learning_rate: 0.01,
             logreg_max_iter: 1000,
             logreg_tolerance: 1e-4,
+            dt_max_depth: 10,
+            dt_min_samples_split: 2,
+            dt_min_samples_leaf: 1,
             scaler_min: 0.0,
             scaler_max: 1.0,
         }
     }
+}
+
+/// Predictions data for supervised learning
+#[derive(Debug, Clone, PartialEq)]
+struct PredictionsData {
+    // Train set results
+    train_actual: Vec<usize>,
+    train_predicted: Vec<usize>,
+    train_accuracy: f64,
+
+    // Test set results
+    test_actual: Vec<usize>,
+    test_predicted: Vec<usize>,
+    test_accuracy: f64,
+
+    // Overall metrics
+    num_classes: usize,
+    confusion_matrix: Vec<Vec<usize>>, // confusion_matrix[actual][predicted]
 }
 
 #[component]
@@ -470,6 +726,40 @@ fn AlgorithmExplanation(algorithm: Algorithm) -> Element {
                         }
                     }
                 },
+                Algorithm::DecisionTree => rsx! {
+                    div {
+                        h2 { "🌳 Decision Tree" }
+                        p { "Creates a tree of decisions to classify data." }
+                        h3 { "How it works:" }
+                        ol {
+                            li { "Recursively splits data based on features" }
+                            li { "Chooses splits that maximize information gain" }
+                            li { "Creates tree structure with decision rules" }
+                            li { "Makes predictions by traversing the tree" }
+                        }
+                        div { class: "tech-note",
+                            strong { "Implementation: " }
+                            "CART algorithm with Gini impurity"
+                        }
+                    }
+                },
+                Algorithm::NaiveBayes => rsx! {
+                    div {
+                        h2 { "🎯 Naive Bayes" }
+                        p { "Probabilistic classifier using Bayes' theorem." }
+                        h3 { "How it works:" }
+                        ol {
+                            li { "Assumes features are independent (naive assumption)" }
+                            li { "Calculates class probabilities using Bayes' theorem" }
+                            li { "Models feature distributions as Gaussians" }
+                            li { "Predicts class with highest probability" }
+                        }
+                        div { class: "tech-note",
+                            strong { "Implementation: " }
+                            "Gaussian Naive Bayes with numerical stability"
+                        }
+                    }
+                },
                 Algorithm::StandardScaler => rsx! {
                     div {
                         h2 { "⚖️ Standard Scaler (Z-score)" }
@@ -511,12 +801,132 @@ fn AlgorithmExplanation(algorithm: Algorithm) -> Element {
     }
 }
 
+/// Predictions Table Component - displays train/test predictions with accuracy
+#[component]
+fn PredictionsTable(predictions: PredictionsData) -> Element {
+    rsx! {
+        div { class: "predictions-container",
+            h2 { "🎯 Predictions & Results" }
+
+            // Overall Summary Stats
+            div { class: "summary-stats",
+                h3 { "📊 Model Performance" }
+
+                div { class: "stats-grid",
+                    div { class: "stat-card train-stat",
+                        div { class: "stat-label", "Training Accuracy" }
+                        div { class: "stat-value", "{predictions.train_accuracy:.1}%" }
+                        div { class: "stat-detail", "{predictions.train_actual.len()} samples" }
+                    }
+
+                    div { class: "stat-card test-stat",
+                        div { class: "stat-label", "Test Accuracy" }
+                        div { class: "stat-value", "{predictions.test_accuracy:.1}%" }
+                        div { class: "stat-detail", "{predictions.test_actual.len()} samples" }
+                    }
+
+                    div { class: "stat-card classes-stat",
+                        div { class: "stat-label", "Classes" }
+                        div { class: "stat-value", "{predictions.num_classes}" }
+                        div { class: "stat-detail", "unique labels" }
+                    }
+                }
+            }
+
+            // Confusion Matrix
+            div { class: "confusion-matrix-section",
+                h3 { "🔢 Confusion Matrix (Test Set)" }
+                ConfusionMatrix { matrix: predictions.confusion_matrix.clone(), num_classes: predictions.num_classes }
+            }
+
+            // Test Predictions Table
+            div { class: "predictions-table-section",
+                h3 { "📋 Test Set Predictions (First 50)" }
+
+                table { class: "predictions-table",
+                    thead {
+                        tr {
+                            th { "Sample #" }
+                            th { "Actual" }
+                            th { "Predicted" }
+                            th { "Result" }
+                        }
+                    }
+                    tbody {
+                        for (i, (&actual, &predicted)) in predictions.test_actual.iter()
+                            .zip(predictions.test_predicted.iter())
+                            .enumerate()
+                            .take(50) {
+                            tr {
+                                class: if actual == predicted { "correct-prediction" } else { "incorrect-prediction" },
+                                td { "{i + 1}" }
+                                td { class: "actual-value", "{actual}" }
+                                td { class: "predicted-value", "{predicted}" }
+                                td {
+                                    if actual == predicted {
+                                        span { class: "result-icon correct", "✓" }
+                                    } else {
+                                        span { class: "result-icon incorrect", "✗" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if predictions.test_actual.len() > 50 {
+                    p { class: "table-note",
+                        "Showing first 50 of {predictions.test_actual.len()} test samples"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Confusion Matrix Component
+#[component]
+fn ConfusionMatrix(matrix: Vec<Vec<usize>>, num_classes: usize) -> Element {
+    rsx! {
+        table { class: "confusion-matrix",
+            thead {
+                tr {
+                    th { class: "matrix-corner", "" }
+                    th { colspan: "{num_classes}", class: "predicted-header", "Predicted Class" }
+                }
+                tr {
+                    th { "Actual" }
+                    for j in 0..num_classes {
+                        th { "Class {j}" }
+                    }
+                }
+            }
+            tbody {
+                for i in 0..num_classes {
+                    tr {
+                        th { "Class {i}" }
+                        for j in 0..num_classes {
+                            td {
+                                class: if i == j { "matrix-cell diagonal" } else { "matrix-cell off-diagonal" },
+                                "{matrix[i][j]}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Run algorithm with performance metrics tracking
 fn run_algorithm_with_metrics(
     algorithm: Algorithm,
     dataset: &CsvDataset,
     params: &AlgorithmParams,
     metrics: &mut Signal<Option<PerformanceMetrics>>,
+    train_split_pct: usize,
+    predictions_data: &mut Signal<Option<PredictionsData>>,
+    show_predictions: &mut Signal<bool>,
 ) -> String {
     let start_time = web_sys::window()
         .and_then(|w| w.performance())
@@ -525,7 +935,15 @@ fn run_algorithm_with_metrics(
 
     let result = match algorithm {
         Algorithm::KMeans => run_kmeans_with_metrics(dataset, params, metrics, start_time),
-        Algorithm::LogisticRegression => run_logistic_regression_with_metrics(dataset, params, metrics, start_time),
+        Algorithm::LogisticRegression => run_logistic_regression_with_metrics(
+            dataset,
+            params,
+            metrics,
+            start_time,
+            train_split_pct,
+            predictions_data,
+            show_predictions,
+        ),
         _ => run_algorithm(algorithm, dataset, params), // Fallback for algorithms without metrics
     };
 
@@ -535,153 +953,705 @@ fn run_algorithm_with_metrics(
 /// Run the selected algorithm on the dataset and return a formatted result message
 fn run_algorithm(algorithm: Algorithm, dataset: &CsvDataset, params: &AlgorithmParams) -> String {
     match algorithm {
-        Algorithm::KMeans => run_kmeans(dataset, params),
-        Algorithm::PCA => run_pca(dataset, params),
-        Algorithm::LogisticRegression => run_logistic_regression(dataset, params),
-        Algorithm::StandardScaler => run_standard_scaler(dataset, params),
-        Algorithm::MinMaxScaler => run_minmax_scaler(dataset, params),
+        Algorithm::KMeans => {
+            // KMeans returns AlgorithmResults, convert to String for backward compatibility
+            match run_kmeans(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nClusters: {}\nSamples: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.metrics.get("Clusters (k)").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.predictions.len()
+                ),
+                Err(e) => format!("❌ K-Means failed: {}", e),
+            }
+        }
+        Algorithm::PCA => {
+            // PCA returns AlgorithmResults, convert to String for backward compatibility
+            match run_pca(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nReduced: {} → {} dimensions\nVariance: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.metrics.get("Original Dimensions").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Reduced Dimensions").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Variance Explained").map(|v| v.display()).unwrap_or("?".to_string())
+                ),
+                Err(e) => format!("❌ PCA failed: {}", e),
+            }
+        }
+        Algorithm::LogisticRegression => {
+            // LogisticRegression returns AlgorithmResults, convert to String for backward compatibility
+            match run_logistic_regression(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nAccuracy: {:.1}%\nClasses: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.accuracy.unwrap_or(0.0),
+                    results.metrics.get("Classes").map(|v| v.display()).unwrap_or("?".to_string())
+                ),
+                Err(e) => format!("❌ Logistic Regression failed: {}", e),
+            }
+        }
+        Algorithm::DecisionTree => {
+            // DecisionTree returns AlgorithmResults, convert to String for backward compatibility
+            match run_decision_tree(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nAccuracy: {:.1}%\nPredictions: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.accuracy.unwrap_or(0.0),
+                    results.predictions.len()
+                ),
+                Err(e) => format!("❌ Decision Tree failed: {}", e),
+            }
+        }
+        Algorithm::NaiveBayes => {
+            // NaiveBayes returns AlgorithmResults, convert to String for backward compatibility
+            match run_naive_bayes(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nAccuracy: {:.1}%\nPredictions: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.accuracy.unwrap_or(0.0),
+                    results.predictions.len()
+                ),
+                Err(e) => format!("❌ Naive Bayes failed: {}", e),
+            }
+        }
+        Algorithm::StandardScaler => {
+            // StandardScaler returns AlgorithmResults, convert to String for backward compatibility
+            match run_standard_scaler(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nFeatures: {}\nSamples: {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.metrics.get("Features").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Samples").map(|v| v.display()).unwrap_or("?".to_string())
+                ),
+                Err(e) => format!("❌ Standard Scaler failed: {}", e),
+            }
+        }
+        Algorithm::MinMaxScaler => {
+            // MinMaxScaler returns AlgorithmResults, convert to String for backward compatibility
+            match run_minmax_scaler(dataset, params) {
+                Ok(results) => format!(
+                    "✅ {} completed!\n\nFeatures: {}\nSamples: {}\nRange: {} to {}\n\nNote: Use the interactive results display for full visualization.",
+                    results.algorithm_name,
+                    results.metrics.get("Features").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Samples").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Min Value").map(|v| v.display()).unwrap_or("?".to_string()),
+                    results.metrics.get("Max Value").map(|v| v.display()).unwrap_or("?".to_string())
+                ),
+                Err(e) => format!("❌ MinMax Scaler failed: {}", e),
+            }
+        }
     }
 }
 
 // Actual implementations - now enabled with correct trait syntax
 
-fn run_kmeans(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+fn run_kmeans(dataset: &CsvDataset, params: &AlgorithmParams) -> Result<AlgorithmResults, String> {
     let k = params.k_clusters;
     let mut kmeans = KMeans::new(k, params.kmeans_max_iter, params.kmeans_tolerance, Some(42));
 
-    match kmeans.fit(&dataset.features) {
-        Ok(_) => {
-            match kmeans.predict(&dataset.features) {
-                Ok(labels) => {
-                    // Count samples per cluster
-                    let mut counts = vec![0; k];
-                    for &label in &labels {
-                        counts[label] += 1;
-                    }
+    kmeans.fit(&dataset.features)?;
+    let labels = kmeans.predict(&dataset.features)?;
 
-                    let cluster_summary: Vec<String> = counts
-                        .iter()
-                        .enumerate()
-                        .map(|(i, &count)| format!("Cluster {}: {} samples", i, count))
-                        .collect();
-
-                    format!(
-                        "✅ K-Means (k={}) completed!\n\n{}",
-                        k,
-                        cluster_summary.join("\n")
-                    )
-                }
-                Err(e) => format!("❌ Prediction failed: {}", e),
-            }
-        }
-        Err(e) => format!("❌ K-Means failed: {}", e),
+    // Count samples per cluster
+    let mut cluster_sizes = vec![0; k];
+    for &label in &labels {
+        cluster_sizes[label] += 1;
     }
+
+    // Get cluster centers if available
+    let cluster_centers = kmeans.cluster_centers();
+    let inertia = kmeans.inertia();
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Clusters (k)".to_string(), MetricValue::Integer(k));
+    metrics.insert("Samples".to_string(), MetricValue::Integer(labels.len()));
+    metrics.insert(
+        "Iterations".to_string(),
+        MetricValue::Integer(kmeans.n_iterations()),
+    );
+    if let Some(inertia_val) = inertia {
+        metrics.insert("Inertia".to_string(), MetricValue::Numeric(inertia_val));
+    }
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Algorithm".to_string(), "K-Means".to_string());
+    model_details.insert("Initialization".to_string(), "K-Means++".to_string());
+    model_details.insert(
+        "Max Iterations".to_string(),
+        params.kmeans_max_iter.to_string(),
+    );
+    model_details.insert(
+        "Tolerance".to_string(),
+        format!("{:.4}", params.kmeans_tolerance),
+    );
+    model_details.insert(
+        "Converged".to_string(),
+        if kmeans.n_iterations() < params.kmeans_max_iter {
+            "Yes".to_string()
+        } else {
+            "No (reached max iterations)".to_string()
+        },
+    );
+
+    Ok(AlgorithmResults {
+        algorithm_name: "K-Means Clustering".to_string(),
+        accuracy: None, // Unsupervised - no accuracy
+        predictions: labels,
+        actual_values: None, // Unsupervised - no ground truth
+        metrics,
+        visualizations: vec![Visualization::ClusterDistribution {
+            cluster_sizes,
+            cluster_centers,
+        }],
+        model_details,
+    })
 }
 
-fn run_pca(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+fn run_pca(dataset: &CsvDataset, params: &AlgorithmParams) -> Result<AlgorithmResults, String> {
     let n_components = params.n_components.min(dataset.features.cols); // Use configured components or fewer if data has less
     let mut pca = PCA::new(n_components);
 
-    match pca.fit(&dataset.features) {
-        Ok(_) => {
-            match pca.transform(&dataset.features) {
-                Ok(_transformed) => {
-                    // Get explained variance if available
-                    let explained_text = format!("Reduced from {} to {} dimensions",
-                        dataset.features.cols,
-                        n_components);
+    pca.fit(&dataset.features)?;
+    let transformed = pca.transform(&dataset.features)?;
 
-                    format!(
-                        "✅ PCA completed!\n\n{}",
-                        explained_text
-                    )
-                }
-                Err(e) => format!("❌ Transform failed: {}", e),
-            }
-        }
-        Err(e) => format!("❌ PCA failed: {}", e),
+    // Get explained variance
+    let explained_variance = pca
+        .explained_variance()
+        .ok_or("PCA did not compute explained variance")?
+        .clone();
+
+    // Calculate cumulative variance
+    let mut cumulative_variance = Vec::new();
+    let mut sum = 0.0;
+    for &var in &explained_variance {
+        sum += var;
+        cumulative_variance.push(sum);
     }
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert(
+        "Original Dimensions".to_string(),
+        MetricValue::Integer(dataset.features.cols),
+    );
+    metrics.insert(
+        "Reduced Dimensions".to_string(),
+        MetricValue::Integer(n_components),
+    );
+    metrics.insert(
+        "Samples".to_string(),
+        MetricValue::Integer(dataset.features.rows),
+    );
+    metrics.insert(
+        "Variance Explained".to_string(),
+        MetricValue::Percentage(sum * 100.0),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Algorithm".to_string(), "PCA".to_string());
+    model_details.insert("Method".to_string(), "Eigenvalue Decomposition".to_string());
+    model_details.insert(
+        "Dimension Reduction".to_string(),
+        format!("{} → {}", dataset.features.cols, n_components),
+    );
+
+    // Create dummy "predictions" (component assignments for each sample)
+    // For PCA, we use the index of the strongest component for each sample
+    let predictions: Vec<usize> = (0..transformed.len())
+        .map(|i| {
+            transformed[i]
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.abs().partial_cmp(&b.abs()).unwrap())
+                .map(|(idx, _)| idx)
+                .unwrap_or(0)
+        })
+        .collect();
+
+    Ok(AlgorithmResults {
+        algorithm_name: "PCA (Principal Component Analysis)".to_string(),
+        accuracy: None, // Unsupervised - no accuracy
+        predictions,
+        actual_values: None, // Unsupervised - no ground truth
+        metrics,
+        visualizations: vec![Visualization::VarianceExplained {
+            explained_variance,
+            cumulative_variance,
+        }],
+        model_details,
+    })
 }
 
-fn run_logistic_regression(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+fn run_logistic_regression(
+    dataset: &CsvDataset,
+    params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
     // Logistic regression requires labels (targets)
-    let mut model = LogisticRegression::new(params.learning_rate, params.logreg_max_iter, params.logreg_tolerance);
+    let mut model = LogisticRegression::new(
+        params.learning_rate,
+        params.logreg_max_iter,
+        params.logreg_tolerance,
+    );
 
-    match model.fit(&dataset.features, &dataset.targets) {
-        Ok(_) => {
-            match model.predict(&dataset.features) {
-                Ok(predictions) => {
-                    // Calculate accuracy
-                    let mut correct = 0;
-                    for (i, &pred) in predictions.iter().enumerate() {
-                        let pred_f64 = pred as f64;
-                        if (pred_f64 - dataset.targets[i]).abs() < 0.5 {
-                            correct += 1;
-                        }
-                    }
-                    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+    model.fit(&dataset.features, &dataset.targets)?;
+    let predictions = model.predict(&dataset.features)?;
 
-                    // Get unique classes
-                    let mut classes: Vec<f64> = dataset.targets.clone();
-                    classes.sort_by(|a, b| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    });
-                    classes.dedup();
+    // Calculate accuracy
+    let correct = predictions
+        .iter()
+        .enumerate()
+        .filter(|(i, &pred)| (pred as f64 - dataset.targets[*i]).abs() < 0.5)
+        .count();
+    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
 
-                    format!(
-                        "✅ Logistic Regression completed!\n\nAccuracy: {:.2}%\nClasses: {}\nSamples: {}",
-                        accuracy,
-                        classes.len(),
-                        predictions.len()
-                    )
-                }
-                Err(e) => format!("❌ Prediction failed: {}", e),
-            }
+    // Get unique classes
+    let mut classes: Vec<f64> = dataset.targets.clone();
+    classes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    classes.dedup();
+    let n_classes = classes.len();
+
+    // Build confusion matrix
+    let mut matrix = vec![vec![0; n_classes]; n_classes];
+    for (i, &pred) in predictions.iter().enumerate() {
+        let actual = dataset.targets[i] as usize;
+        if pred < n_classes && actual < n_classes {
+            matrix[actual][pred] += 1;
         }
-        Err(e) => format!("❌ Logistic Regression failed: {}", e),
     }
+
+    let class_labels: Vec<String> = classes.iter().map(|c| format!("Class {}", c)).collect();
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Classes".to_string(), MetricValue::Integer(n_classes));
+    metrics.insert(
+        "Samples".to_string(),
+        MetricValue::Integer(predictions.len()),
+    );
+    metrics.insert(
+        "Learning Rate".to_string(),
+        MetricValue::Numeric(params.learning_rate),
+    );
+    metrics.insert(
+        "Max Iterations".to_string(),
+        MetricValue::Integer(params.logreg_max_iter),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Algorithm".to_string(), "Logistic Regression".to_string());
+    model_details.insert("Optimization".to_string(), "Gradient Descent".to_string());
+    model_details.insert(
+        "Tolerance".to_string(),
+        format!("{:.6}", params.logreg_tolerance),
+    );
+    model_details.insert(
+        "Classes".to_string(),
+        if n_classes == 2 {
+            "Binary Classification".to_string()
+        } else {
+            format!("Multiclass ({} classes)", n_classes)
+        },
+    );
+
+    Ok(AlgorithmResults {
+        algorithm_name: "Logistic Regression".to_string(),
+        accuracy: Some(accuracy),
+        predictions,
+        actual_values: Some(dataset.targets.clone()),
+        metrics,
+        visualizations: vec![Visualization::ConfusionMatrix {
+            matrix,
+            class_labels,
+        }],
+        model_details,
+    })
 }
 
-fn run_standard_scaler(dataset: &CsvDataset, _params: &AlgorithmParams) -> String {
+fn run_standard_scaler(
+    dataset: &CsvDataset,
+    _params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
     let mut scaler = StandardScaler::new();
 
-    match scaler.fit(&dataset.features) {
-        Ok(_) => {
-            match scaler.transform(&dataset.features) {
-                Ok(scaled) => {
-                    format!(
-                        "✅ StandardScaler completed!\n\nScaled {} features to μ=0, σ=1\nTransformed {} samples",
-                        dataset.features.cols,
-                        scaled.len()
-                    )
-                }
-                Err(e) => format!("❌ Transform failed: {}", e),
-            }
+    // Get dimensions
+    let (n_samples, n_features) = dataset.features.shape();
+
+    // Calculate before statistics
+    let mut before_mean = vec![0.0; n_features];
+    let mut before_std = vec![0.0; n_features];
+
+    for j in 0..n_features {
+        let mut sum = 0.0;
+        for i in 0..n_samples {
+            sum += dataset.features.get(i, j).unwrap();
         }
-        Err(e) => format!("❌ StandardScaler failed: {}", e),
+        before_mean[j] = sum / n_samples as f64;
     }
+
+    for j in 0..n_features {
+        let mut sum_sq = 0.0;
+        for i in 0..n_samples {
+            let diff = dataset.features.get(i, j).unwrap() - before_mean[j];
+            sum_sq += diff * diff;
+        }
+        before_std[j] = (sum_sq / n_samples as f64).sqrt();
+    }
+
+    scaler.fit(&dataset.features)?;
+    let scaled = scaler.transform(&dataset.features)?;
+
+    // Calculate after statistics (scaled is Vec<Vec<f64>>)
+    let mut after_mean = vec![0.0; n_features];
+    let mut after_std = vec![0.0; n_features];
+
+    for j in 0..n_features {
+        let mut sum = 0.0;
+        for i in 0..n_samples {
+            sum += scaled[i][j];
+        }
+        after_mean[j] = sum / n_samples as f64;
+    }
+
+    for j in 0..n_features {
+        let mut sum_sq = 0.0;
+        for i in 0..n_samples {
+            let diff = scaled[i][j] - after_mean[j];
+            sum_sq += diff * diff;
+        }
+        after_std[j] = (sum_sq / n_samples as f64).sqrt();
+    }
+
+    // Build feature names
+    let feature_names: Vec<String> = (0..n_features)
+        .map(|i| format!("Feature {}", i + 1))
+        .collect();
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Features".to_string(), MetricValue::Integer(n_features));
+    metrics.insert("Samples".to_string(), MetricValue::Integer(n_samples));
+    metrics.insert(
+        "Mean After".to_string(),
+        MetricValue::Numeric(after_mean.iter().sum::<f64>() / n_features as f64),
+    );
+    metrics.insert(
+        "Std After".to_string(),
+        MetricValue::Numeric(after_std.iter().sum::<f64>() / n_features as f64),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Scaler Type".to_string(), "Standard Scaler".to_string());
+    model_details.insert(
+        "Normalization".to_string(),
+        "μ=0, σ=1 (z-score normalization)".to_string(),
+    );
+    model_details.insert(
+        "Method".to_string(),
+        "Subtracts mean and divides by standard deviation".to_string(),
+    );
+
+    // Dummy predictions (feature index with highest absolute scaled value)
+    let predictions: Vec<usize> = (0..n_samples)
+        .map(|i| {
+            (0..n_features)
+                .max_by(|&a, &b| {
+                    let val_a = scaled[i][a].abs();
+                    let val_b = scaled[i][b].abs();
+                    val_a
+                        .partial_cmp(&val_b)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .unwrap_or(0)
+        })
+        .collect();
+
+    Ok(AlgorithmResults {
+        algorithm_name: "Standard Scaler".to_string(),
+        accuracy: None,
+        predictions,
+        actual_values: None,
+        metrics,
+        visualizations: vec![Visualization::ScalerStats {
+            before_mean,
+            before_std,
+            after_mean,
+            after_std,
+            feature_names,
+        }],
+        model_details,
+    })
 }
 
-fn run_minmax_scaler(dataset: &CsvDataset, params: &AlgorithmParams) -> String {
+fn run_minmax_scaler(
+    dataset: &CsvDataset,
+    params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
     let mut scaler = MinMaxScaler::new(params.scaler_min, params.scaler_max);
 
-    match scaler.fit(&dataset.features) {
-        Ok(_) => {
-            match scaler.transform(&dataset.features) {
-                Ok(scaled) => {
-                    format!(
-                        "✅ MinMaxScaler completed!\n\nScaled {} features to [{}, {}]\nTransformed {} samples",
-                        dataset.features.cols,
-                        params.scaler_min,
-                        params.scaler_max,
-                        scaled.len()
-                    )
-                }
-                Err(e) => format!("❌ Transform failed: {}", e),
-            }
+    // Get dimensions
+    let (n_samples, n_features) = dataset.features.shape();
+
+    // Calculate before statistics
+    let mut before_mean = vec![0.0; n_features];
+    let mut before_std = vec![0.0; n_features];
+
+    for j in 0..n_features {
+        let mut sum = 0.0;
+        for i in 0..n_samples {
+            sum += dataset.features.get(i, j).unwrap();
         }
-        Err(e) => format!("❌ MinMaxScaler failed: {}", e),
+        before_mean[j] = sum / n_samples as f64;
     }
+
+    for j in 0..n_features {
+        let mut sum_sq = 0.0;
+        for i in 0..n_samples {
+            let diff = dataset.features.get(i, j).unwrap() - before_mean[j];
+            sum_sq += diff * diff;
+        }
+        before_std[j] = (sum_sq / n_samples as f64).sqrt();
+    }
+
+    scaler.fit(&dataset.features)?;
+    let scaled = scaler.transform(&dataset.features)?;
+
+    // Calculate after statistics (scaled is Vec<Vec<f64>>)
+    let mut after_mean = vec![0.0; n_features];
+    let mut after_std = vec![0.0; n_features];
+
+    for j in 0..n_features {
+        let mut sum = 0.0;
+        for i in 0..n_samples {
+            sum += scaled[i][j];
+        }
+        after_mean[j] = sum / n_samples as f64;
+    }
+
+    for j in 0..n_features {
+        let mut sum_sq = 0.0;
+        for i in 0..n_samples {
+            let diff = scaled[i][j] - after_mean[j];
+            sum_sq += diff * diff;
+        }
+        after_std[j] = (sum_sq / n_samples as f64).sqrt();
+    }
+
+    // Build feature names
+    let feature_names: Vec<String> = (0..n_features)
+        .map(|i| format!("Feature {}", i + 1))
+        .collect();
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Features".to_string(), MetricValue::Integer(n_features));
+    metrics.insert("Samples".to_string(), MetricValue::Integer(n_samples));
+    metrics.insert(
+        "Min Value".to_string(),
+        MetricValue::Numeric(params.scaler_min),
+    );
+    metrics.insert(
+        "Max Value".to_string(),
+        MetricValue::Numeric(params.scaler_max),
+    );
+    metrics.insert(
+        "Mean After".to_string(),
+        MetricValue::Numeric(after_mean.iter().sum::<f64>() / n_features as f64),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Scaler Type".to_string(), "MinMax Scaler".to_string());
+    model_details.insert(
+        "Range".to_string(),
+        format!("[{}, {}]", params.scaler_min, params.scaler_max),
+    );
+    model_details.insert(
+        "Method".to_string(),
+        "Scales features to specified min/max range".to_string(),
+    );
+
+    // Dummy predictions (feature index with highest scaled value)
+    let predictions: Vec<usize> = (0..n_samples)
+        .map(|i| {
+            (0..n_features)
+                .max_by(|&a, &b| {
+                    let val_a = scaled[i][a];
+                    let val_b = scaled[i][b];
+                    val_a
+                        .partial_cmp(&val_b)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .unwrap_or(0)
+        })
+        .collect();
+
+    Ok(AlgorithmResults {
+        algorithm_name: "MinMax Scaler".to_string(),
+        accuracy: None,
+        predictions,
+        actual_values: None,
+        metrics,
+        visualizations: vec![Visualization::ScalerStats {
+            before_mean,
+            before_std,
+            after_mean,
+            after_std,
+            feature_names,
+        }],
+        model_details,
+    })
+}
+
+fn run_decision_tree(
+    dataset: &CsvDataset,
+    params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
+    let mut dt = DecisionTreeClassifier::new(
+        SplitCriterion::Gini,
+        Some(params.dt_max_depth),
+        params.dt_min_samples_split,
+        params.dt_min_samples_leaf,
+    );
+
+    dt.fit(&dataset.features, &dataset.targets)?;
+    let predictions = dt.predict(&dataset.features)?;
+
+    // Calculate accuracy
+    let correct = predictions
+        .iter()
+        .zip(dataset.targets.iter())
+        .filter(|(&pred, &actual)| pred == actual as usize)
+        .count();
+    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+
+    // Count classes
+    let mut classes = std::collections::HashSet::new();
+    for &target in &dataset.targets {
+        classes.insert(target as usize);
+    }
+    let n_classes = classes.len();
+
+    // Build confusion matrix
+    let class_labels: Vec<String> = (0..n_classes).map(|i| format!("Class {}", i)).collect();
+    let mut matrix = vec![vec![0; n_classes]; n_classes];
+
+    for (i, &pred) in predictions.iter().enumerate() {
+        let actual = dataset.targets[i] as usize;
+        if pred < n_classes && actual < n_classes {
+            matrix[actual][pred] += 1;
+        }
+    }
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Classes".to_string(), MetricValue::Integer(n_classes));
+    metrics.insert(
+        "Samples".to_string(),
+        MetricValue::Integer(predictions.len()),
+    );
+    metrics.insert(
+        "Tree Depth".to_string(),
+        MetricValue::Integer(params.dt_max_depth),
+    );
+    metrics.insert(
+        "Min Samples Split".to_string(),
+        MetricValue::Integer(params.dt_min_samples_split),
+    );
+    metrics.insert(
+        "Min Samples Leaf".to_string(),
+        MetricValue::Integer(params.dt_min_samples_leaf),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert(
+        "Algorithm".to_string(),
+        "Decision Tree Classifier (CART)".to_string(),
+    );
+    model_details.insert("Split Criterion".to_string(), "Gini Impurity".to_string());
+    model_details.insert("Max Depth".to_string(), params.dt_max_depth.to_string());
+
+    Ok(AlgorithmResults {
+        algorithm_name: "Decision Tree".to_string(),
+        accuracy: Some(accuracy),
+        predictions,
+        actual_values: Some(dataset.targets.clone()),
+        metrics,
+        visualizations: vec![Visualization::ConfusionMatrix {
+            matrix,
+            class_labels,
+        }],
+        model_details,
+    })
+}
+
+fn run_naive_bayes(
+    dataset: &CsvDataset,
+    _params: &AlgorithmParams,
+) -> Result<AlgorithmResults, String> {
+    let mut nb = GaussianNB::new();
+
+    nb.fit(&dataset.features, &dataset.targets)?;
+    let predictions = nb.predict(&dataset.features)?;
+
+    // Calculate accuracy
+    let correct = predictions
+        .iter()
+        .zip(dataset.targets.iter())
+        .filter(|(&pred, &actual)| pred == actual as usize)
+        .count();
+    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
+
+    // Count classes
+    let mut classes = std::collections::HashSet::new();
+    for &target in &dataset.targets {
+        classes.insert(target as usize);
+    }
+
+    // Create confusion matrix
+    let class_labels: Vec<String> = classes.iter().map(|c| c.to_string()).collect();
+    let n_classes = classes.len();
+    let mut confusion_matrix = vec![vec![0; n_classes]; n_classes];
+
+    for (&pred, &actual) in predictions.iter().zip(dataset.targets.iter()) {
+        let actual_idx = actual as usize;
+        confusion_matrix[actual_idx][pred] += 1;
+    }
+
+    // Build metrics
+    let mut metrics = HashMap::new();
+    metrics.insert("Classes".to_string(), MetricValue::Integer(n_classes));
+    metrics.insert(
+        "Samples".to_string(),
+        MetricValue::Integer(predictions.len()),
+    );
+
+    // Build model details
+    let mut model_details = HashMap::new();
+    model_details.insert("Model Type".to_string(), "Gaussian Naive Bayes".to_string());
+    model_details.insert("Distribution".to_string(), "Gaussian (Normal)".to_string());
+    model_details.insert(
+        "Assumption".to_string(),
+        "Features are independent".to_string(),
+    );
+
+    Ok(AlgorithmResults {
+        algorithm_name: "Naive Bayes".to_string(),
+        accuracy: Some(accuracy),
+        predictions,
+        actual_values: Some(dataset.targets.clone()),
+        metrics,
+        visualizations: vec![Visualization::ConfusionMatrix {
+            matrix: confusion_matrix,
+            class_labels,
+        }],
+        model_details,
+    })
 }
 
 // Algorithm runners with metrics tracking
@@ -764,19 +1734,60 @@ fn run_logistic_regression_with_metrics(
     params: &AlgorithmParams,
     metrics: &mut Signal<Option<PerformanceMetrics>>,
     start_time: f64,
+    train_split_pct: usize,
+    predictions_data: &mut Signal<Option<PredictionsData>>,
+    show_predictions: &mut Signal<bool>,
 ) -> String {
+    use linear_algebra::matrix::Matrix;
+
     let learning_rate = params.learning_rate;
     let max_iter = params.logreg_max_iter;
     let tolerance = params.logreg_tolerance;
-
-    let mut model = LogisticRegression::new(learning_rate, max_iter, tolerance);
 
     // Update metrics during training
     if let Some(ref mut perf) = *metrics.write() {
         perf.status = TrainingStatus::Running;
     }
 
-    match model.fit(&dataset.features, &dataset.targets) {
+    // Split data into train/test sets
+    let n_samples = dataset.num_samples;
+    let train_size = (n_samples * train_split_pct) / 100;
+
+    // Extract train set
+    let mut train_data: Vec<f64> = Vec::new();
+    let mut train_targets: Vec<f64> = Vec::new();
+    for i in 0..train_size {
+        for j in 0..dataset.features.cols {
+            train_data.push(*dataset.features.get(i, j).unwrap());
+        }
+        train_targets.push(dataset.targets[i]);
+    }
+
+    // Extract test set
+    let mut test_data: Vec<f64> = Vec::new();
+    let mut test_targets: Vec<f64> = Vec::new();
+    for i in train_size..n_samples {
+        for j in 0..dataset.features.cols {
+            test_data.push(*dataset.features.get(i, j).unwrap());
+        }
+        test_targets.push(dataset.targets[i]);
+    }
+
+    let train_matrix = match Matrix::from_vec(train_data, train_size, dataset.features.cols) {
+        Ok(m) => m,
+        Err(e) => return format!("❌ Failed to create train matrix: {}", e),
+    };
+
+    let test_matrix =
+        match Matrix::from_vec(test_data, n_samples - train_size, dataset.features.cols) {
+            Ok(m) => m,
+            Err(e) => return format!("❌ Failed to create test matrix: {}", e),
+        };
+
+    // Train model on training set
+    let mut model = LogisticRegression::new(learning_rate, max_iter, tolerance);
+
+    match model.fit(&train_matrix, &train_targets) {
         Ok(_) => {
             let elapsed = web_sys::window()
                 .and_then(|w| w.performance())
@@ -795,44 +1806,94 @@ fn run_logistic_regression_with_metrics(
                 };
             }
 
-            match model.predict(&dataset.features) {
-                Ok(predictions) => {
-                    let mut correct = 0;
-                    for (i, &pred) in predictions.iter().enumerate() {
-                        let pred_f64 = pred as f64;
-                        if (pred_f64 - dataset.targets[i]).abs() < 0.5 {
-                            correct += 1;
-                        }
-                    }
-                    let accuracy = (correct as f64 / predictions.len() as f64) * 100.0;
-
-                    let mut classes: Vec<f64> = dataset.targets.clone();
-                    classes.sort_by(|a, b| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    });
-                    classes.dedup();
-
-                    format!(
-                        "✅ Logistic Regression completed in {:.2}ms!\n\nAccuracy: {:.2}%\nClasses: {}\nSamples: {}",
-                        elapsed,
-                        accuracy,
-                        classes.len(),
-                        predictions.len()
-                    )
-                }
+            // Predict on train set
+            let train_predictions = match model.predict(&train_matrix) {
+                Ok(p) => p,
                 Err(e) => {
                     if let Some(ref mut perf) = *metrics.write() {
                         perf.status = TrainingStatus::Failed;
                     }
-                    format!("❌ Prediction failed: {}", e)
+                    return format!("❌ Train prediction failed: {}", e);
                 }
+            };
+
+            // Predict on test set
+            let test_predictions = match model.predict(&test_matrix) {
+                Ok(p) => p,
+                Err(e) => {
+                    if let Some(ref mut perf) = *metrics.write() {
+                        perf.status = TrainingStatus::Failed;
+                    }
+                    return format!("❌ Test prediction failed: {}", e);
+                }
+            };
+
+            // Calculate accuracies
+            let train_actual: Vec<usize> = train_targets.iter().map(|&x| x as usize).collect();
+            let test_actual: Vec<usize> = test_targets.iter().map(|&x| x as usize).collect();
+
+            let train_correct = train_predictions
+                .iter()
+                .zip(train_actual.iter())
+                .filter(|(&pred, &actual)| pred == actual)
+                .count();
+
+            let test_correct = test_predictions
+                .iter()
+                .zip(test_actual.iter())
+                .filter(|(&pred, &actual)| pred == actual)
+                .count();
+
+            let train_accuracy = (train_correct as f64 / train_predictions.len() as f64) * 100.0;
+            let test_accuracy = (test_correct as f64 / test_predictions.len() as f64) * 100.0;
+
+            // Get number of classes
+            let mut classes: Vec<usize> = train_actual.clone();
+            classes.extend(test_actual.clone());
+            classes.sort();
+            classes.dedup();
+            let num_classes = classes.len();
+
+            // Build confusion matrix (test set only)
+            let mut confusion_matrix = vec![vec![0; num_classes]; num_classes];
+            for (&actual, &pred) in test_actual.iter().zip(test_predictions.iter()) {
+                confusion_matrix[actual][pred] += 1;
             }
+
+            // Store predictions data
+            predictions_data.set(Some(PredictionsData {
+                train_actual,
+                train_predicted: train_predictions.clone(),
+                train_accuracy,
+                test_actual,
+                test_predicted: test_predictions.clone(),
+                test_accuracy,
+                num_classes,
+                confusion_matrix,
+            }));
+
+            // Show predictions table
+            show_predictions.set(true);
+
+            format!(
+                "✅ Logistic Regression completed in {:.2}ms!\n\n\
+                📊 Training Accuracy: {:.1}% ({} samples)\n\
+                🎯 Test Accuracy: {:.1}% ({} samples)\n\
+                📈 Classes: {}\n\n\
+                See detailed predictions and confusion matrix below!",
+                elapsed,
+                train_accuracy,
+                train_predictions.len(),
+                test_accuracy,
+                test_predictions.len(),
+                num_classes
+            )
         }
         Err(e) => {
             if let Some(ref mut perf) = *metrics.write() {
                 perf.status = TrainingStatus::Failed;
             }
-            format!("❌ Logistic Regression failed: {}", e)
+            format!("❌ Logistic Regression training failed: {}", e)
         }
     }
 }
